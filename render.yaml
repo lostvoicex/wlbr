@@ -10,7 +10,7 @@ services:
     repo: https://github.com/lostvoicex/wlbr.git
     branch: main
     buildCommand: |
-      cd frontend && pnpm install && pnpm run build
+      cd frontend && npm install && npx vite build
     staticPublishPath: ./frontend/dist
     # 单页应用路由回退
     routes:
@@ -44,7 +44,7 @@ services:
         fromDatabase:
           name: wali-bell-db
           property: connectionString
-          # Render 默认提供的是 postgres://，需改成 postgresql+psycopg://
+          # Render 默认提供的是 postgres://，start.sh 会自动转换
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: JWT_ACCESS_TOKEN_EXPIRE_MINUTES
@@ -52,11 +52,7 @@ services:
       - key: JWT_REFRESH_TOKEN_EXPIRE_DAYS
         value: "14"
       - key: CORS_ALLOW_ORIGINS
-        fromService:
-          type: web
-          name: wali-bell-frontend
-          property: host
-          template: "https://{{host}}"
+        value: "https://lostvoicex.github.io,https://wali-bell-frontend.onrender.com"
 
   # ---------- OJ 安全沙箱（可选，如不需要可删除）----------
   # 注意：Render 免费层不支持 Docker，此服务需要付费层或另行部署

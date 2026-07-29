@@ -16,9 +16,24 @@ fi
 echo "执行数据库迁移..."
 alembic upgrade head
 
-# 如果是首次部署，可取消下面注释来初始化种子数据
-# echo "初始化演示数据..."
-# python -m app.seed
+# 检查是否已有种子数据，没有则初始化
+echo "检查种子数据..."
+SEED_CHECK=$(python -c "
+from app.db import SessionLocal
+from app.models.question import Question
+db = SessionLocal()
+count = db.query(Question).count()
+print(count)
+db.close()
+" 2>/dev/null || echo "0")
+
+if [ "$SEED_CHECK" = "0" ]; then
+  echo "首次部署，初始化演示数据（486题 + 5位学员）..."
+  python -m app.seed
+  echo "种子数据初始化完成"
+else
+  echo "已有 $SEED_CHECK 道题目，跳过种子数据初始化"
+fi
 
 # 启动 FastAPI（Render 要求监听 0.0.0.0:$PORT）
 PORT="${PORT:-10000}"
