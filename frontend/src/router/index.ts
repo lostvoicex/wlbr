@@ -92,8 +92,11 @@ const routes: RouteRecordRaw[] = [
   },
 ];
 
+// GitHub Pages 部署在子路径 /wlbr/ 下，需要同步 router base
+const routerBase = import.meta.env.BASE_URL;
+
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(routerBase),
   routes,
 });
 

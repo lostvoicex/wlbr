@@ -8,7 +8,11 @@ const BACKEND_PORT = Number(process.env.BACKEND_PORT || 8000);
 
 export default defineConfig(({ mode }) => {
   loadEnv(mode, process.cwd(), "");
+  // GitHub Pages 部署需要 base 路径（仓库名）
+  // 本地开发时 base 为 '/'
+  const isGithubPages = process.env.GITHUB_ACTIONS === "true";
   return {
+    base: isGithubPages ? "/wlbr/" : "/",
     plugins: [vue()],
     resolve: {
       alias: {
