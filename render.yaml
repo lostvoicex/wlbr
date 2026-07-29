@@ -7,7 +7,7 @@ services:
   - type: web
     name: wali-bell-frontend
     runtime: static
-    repo: https://github.com/你的用户名/你的仓库名
+    repo: https://github.com/lostvoicex/wlbr.git
     branch: main
     buildCommand: |
       cd frontend && pnpm install && pnpm run build
@@ -29,7 +29,7 @@ services:
   - type: web
     name: wali-bell-backend
     runtime: python
-    repo: https://github.com/你的用户名/你的仓库名
+    repo: https://github.com/lostvoicex/wlbr.git
     branch: main
     buildCommand: |
       cd backend && pip install -r requirements.txt
