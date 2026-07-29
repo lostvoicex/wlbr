@@ -1,0 +1,43 @@
+# ===== Root =====
+node_modules/
+.env
+.env.local
+*.log
+.DS_Store
+.preview
+
+# ===== Frontend =====
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.local
+# 防止 tsc 误产物污染 src/ (曾导致 Vite 解析到旧 .js 触发 ?. SyntaxError)
+frontend/src/**/*.js
+frontend/src/**/*.vue.js
+frontend/src/**/*.js.map
+
+# ===== Backend =====
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/.venv/
+backend/venv/
+backend/.pytest_cache/
+backend/.ruff_cache/
+backend/.mypy_cache/
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+
+# ===== Postgres (docker-compose volume) =====
+data/postgres/
+
+# ===== IDE =====
+.idea/
+.vscode/
+*.swp
+
+# ===== Logs =====
+logs/
+.cozeproj/reduction
+.codegraph
