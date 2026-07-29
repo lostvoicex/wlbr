@@ -33,10 +33,12 @@ jobs:
           node-version: 20
 
       - name: 安装依赖
-        run: cd frontend && npm install
+        working-directory: frontend
+        run: npm install
 
       - name: 构建
-        run: cd frontend && npx vite build
+        working-directory: frontend
+        run: npx vite build
         env:
           VITE_API_BASE_URL: https://wali-bell-backend.onrender.com/api/v1
 
