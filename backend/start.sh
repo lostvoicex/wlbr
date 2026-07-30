@@ -35,7 +35,7 @@ else
   echo "已有 $SEED_CHECK 道题目，跳过种子数据初始化"
 fi
 
-# 启动 FastAPI（Render 要求监听 0.0.0.0:$PORT）
-PORT="${PORT:-10000}"
+# 启动 FastAPI（Koyeb/Render 都通过 PORT 环境变量指定端口）
+PORT="${PORT:-8000}"
 echo "启动服务，端口: $PORT"
 exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
