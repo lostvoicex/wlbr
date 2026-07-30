@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 后端启动脚本（Render 生产环境用）
-# 功能：1) 转换 DATABASE_URL 格式  2) 执行 Alembic 迁移  3) 启动 FastAPI
+# 功能：1) 转换 DATABASE_URL 格式  2) 建表/迁移  3) 种子数据  4) 启动 FastAPI
 
 set -e
 
@@ -15,9 +15,24 @@ fi
 # 确保 SQLite 数据目录存在
 mkdir -p ./data
 
-# 执行 Alembic 迁移（自动升级到最新版本，失败不阻塞启动）
-echo "执行数据库迁移..."
-alembic upgrade head || echo "WARNING: 迁移失败，将使用 create_all 兜底"
+# 建表策略：
+# - PostgreSQL：用 Alembic 迁移（BigInteger 在 PG 中支持 autoincrement）
+# - SQLite：用 create_all（ORM 的 BigInteger().with_variant(Integer, "sqlite") 才能让 autoincrement 生效）
+if [ -n "$DATABASE_URL" ]; then
+  echo "使用 PostgreSQL，执行 Alembic 迁移..."
+  alembic upgrade head || echo "WARNING: 迁移失败，将使用 create_all 兜底"
+else
+  echo "使用 SQLite，跳过 Alembic（避免 BigInteger 导致 autoincrement 失效）"
+fi
+
+# 用 create_all 兜底（确保表存在，已存在则跳过）
+echo "确保表结构存在..."
+python -c "
+from app.db import Base, engine
+from app import models  # noqa: F401 - 触发模型注册
+Base.metadata.create_all(bind=engine)
+print('表结构就绪')
+"
 
 # 检查是否已有种子数据，没有则初始化
 echo "检查种子数据..."
