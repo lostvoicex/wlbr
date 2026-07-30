@@ -1,44 +1,145 @@
-#!/usr/bin/env bash
-# 后端启动脚本（Render 生产环境用）
-# 功能：1) 转换 DATABASE_URL 格式  2) 执行 Alembic 迁移  3) 启动 FastAPI
+/* ====== 设计 Tokens（对照 DESIGN.md） ====== */
+:root {
+  --color-primary: #ff7a45;
+  --color-primary-hover: #ff9366;
+  --color-secondary: #4096ff;
+  --color-accent: #faad14;
+  --color-pass: #52c41a;
+  --color-warn: #faad14;
+  --color-weak: #ff4d4f;
 
-set -e
+  --color-bg-kid: #fff9f2;
+  --color-bg-teacher: #f5f7fa;
 
-echo "========== 瓦力贝尔后端启动 =========="
+  --color-text: #1f2937;
+  --color-text-sub: #6b7280;
+  --color-border-kid: #f0e7dc;
+  --color-border-teacher: #e5e7eb;
 
-# Render 提供的 DATABASE_URL 是 postgres://，需转换为 postgresql+psycopg://
-if [ -n "$DATABASE_URL" ]; then
-  export DATABASE_URL="${DATABASE_URL/postgres:\/\//postgresql+psycopg:\/\/}"
-  echo "数据库连接串: $DATABASE_URL"
-fi
+  --radius-lg-kid: 20px;
+  --radius-md-kid: 12px;
+  --radius-lg-teacher: 10px;
+  --radius-md-teacher: 6px;
 
-# 确保 SQLite 数据目录存在
-mkdir -p ./data
+  --shadow-card-kid: 0 6px 20px rgba(255, 122, 69, 0.12);
+  --shadow-card-teacher: 0 2px 8px rgba(0, 0, 0, 0.06);
 
-# 执行 Alembic 迁移（自动升级到最新版本）
-echo "执行数据库迁移..."
-alembic upgrade head
+  --font-kid: "LXGW WenKai", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-teacher: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+  --font-num: "Nunito", "Inter", system-ui;
 
-# 检查是否已有种子数据，没有则初始化
-echo "检查种子数据..."
-SEED_CHECK=$(python -c "
-from app.db import SessionLocal
-from app.models.question import Question
-db = SessionLocal()
-count = db.query(Question).count()
-print(count)
-db.close()
-" 2>/dev/null || echo "0")
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
 
-if [ "$SEED_CHECK" = "0" ]; then
-  echo "首次部署，初始化演示数据（486题 + 5位学员）..."
-  python -m app.seed
-  echo "种子数据初始化完成"
-else
-  echo "已有 $SEED_CHECK 道题目，跳过种子数据初始化"
-fi
+* {
+  box-sizing: border-box;
+}
 
-# 启动 FastAPI（Koyeb/Render 都通过 PORT 环境变量指定端口）
-PORT="${PORT:-8000}"
-echo "启动服务，端口: $PORT"
-exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-teacher);
+  color: var(--color-text);
+  background: var(--color-bg-teacher);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============ 学员端 ============ */
+.kid-app {
+  font-family: var(--font-kid);
+  background: linear-gradient(180deg, #fff9f2 0%, #fff2e6 100%);
+  min-height: 100%;
+}
+
+.kid-app .ant-btn-primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  height: 48px;
+  border-radius: 24px;
+  font-size: 18px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(255, 122, 69, 0.24);
+  transition: transform 200ms var(--ease-bounce), box-shadow 200ms ease-out;
+}
+
+.kid-app .ant-btn-primary:hover {
+  background: var(--color-primary-hover) !important;
+  border-color: var(--color-primary-hover) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(255, 122, 69, 0.32);
+}
+
+.kid-app .ant-btn-primary:active {
+  transform: scale(0.96);
+}
+
+.kid-card {
+  background: #ffffff;
+  border-radius: var(--radius-lg-kid);
+  box-shadow: var(--shadow-card-kid);
+  position: relative;
+  padding: 24px;
+  overflow: hidden;
+}
+
+.kid-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--color-primary);
+}
+
+.kid-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0 0 8px;
+}
+
+.kid-subtitle {
+  color: var(--color-text-sub);
+  font-size: 15px;
+  margin-bottom: 24px;
+}
+
+/* ============ 老师端 ============ */
+.teacher-app {
+  font-family: var(--font-teacher);
+  background: var(--color-bg-teacher);
+  min-height: 100vh;
+}
+
+.teacher-card {
+  background: #fff;
+  border-radius: var(--radius-lg-teacher);
+  box-shadow: var(--shadow-card-teacher);
+  padding: 20px;
+}
+
+/* ============ 通用工具类 ============ */
+.center-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.max-w-480 {
+  max-width: 480px;
+  width: 100%;
+}
+
+.max-w-640 {
+  max-width: 640px;
+  width: 100%;
+}

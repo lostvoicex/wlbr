@@ -1,44 +1,90 @@
-#!/usr/bin/env bash
-# 后端启动脚本（Render 生产环境用）
-# 功能：1) 转换 DATABASE_URL 格式  2) 执行 Alembic 迁移  3) 启动 FastAPI
+import client from "./client";
 
-set -e
+export interface WorkOrderOut {
+  id: number;
+  student_id: number;
+  session_id: number | null;
+  teacher_id: number | null;
+  assignee_id: number | null;
+  syllabus_target: string;
+  weak_kps: string;
+  title: string;
+  description: string | null;
+  chapters_json: string | null;
+  status: string; // pending / in_progress / completed / cancelled
+  priority: string; // low / medium / high
+  due_date: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  student_name?: string;
+  teacher_name?: string;
+  assignee_name?: string;
+}
 
-echo "========== 瓦力贝尔后端启动 =========="
+export interface WorkOrderListResp {
+  total: number;
+  page: number;
+  page_size: number;
+  items: WorkOrderOut[];
+}
 
-# Render 提供的 DATABASE_URL 是 postgres://，需转换为 postgresql+psycopg://
-if [ -n "$DATABASE_URL" ]; then
-  export DATABASE_URL="${DATABASE_URL/postgres:\/\//postgresql+psycopg:\/\/}"
-  echo "数据库连接串: $DATABASE_URL"
-fi
+export interface WorkOrderCreate {
+  student_id: number;
+  session_id?: number;
+  syllabus_target: string;
+  weak_kps: string;
+  title: string;
+  description?: string;
+  priority?: string;
+  due_date?: string;
+  assignee_id?: number;
+}
 
-# 确保 SQLite 数据目录存在
-mkdir -p ./data
+export interface WorkOrderUpdate {
+  title?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  due_date?: string;
+  weak_kps?: string;
+  assignee_id?: number;
+}
 
-# 执行 Alembic 迁移（自动升级到最新版本）
-echo "执行数据库迁移..."
-alembic upgrade head
+export function listWorkOrders(params: {
+  keyword?: string;
+  student_id?: number;
+  status?: string;
+  priority?: string;
+  syllabus_target?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  return client
+    .get<WorkOrderListResp>("/work-orders", { params })
+    .then((r) => r.data);
+}
 
-# 检查是否已有种子数据，没有则初始化
-echo "检查种子数据..."
-SEED_CHECK=$(python -c "
-from app.db import SessionLocal
-from app.models.question import Question
-db = SessionLocal()
-count = db.query(Question).count()
-print(count)
-db.close()
-" 2>/dev/null || echo "0")
+export function getWorkOrder(id: number) {
+  return client.get<WorkOrderOut>(`/work-orders/${id}`).then((r) => r.data);
+}
 
-if [ "$SEED_CHECK" = "0" ]; then
-  echo "首次部署，初始化演示数据（486题 + 5位学员）..."
-  python -m app.seed
-  echo "种子数据初始化完成"
-else
-  echo "已有 $SEED_CHECK 道题目，跳过种子数据初始化"
-fi
+export function createWorkOrder(data: WorkOrderCreate) {
+  return client.post<WorkOrderOut>("/work-orders", data).then((r) => r.data);
+}
 
-# 启动 FastAPI（Koyeb/Render 都通过 PORT 环境变量指定端口）
-PORT="${PORT:-8000}"
-echo "启动服务，端口: $PORT"
-exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
+export function updateWorkOrder(id: number, data: WorkOrderUpdate) {
+  return client.put<WorkOrderOut>(`/work-orders/${id}`, data).then((r) => r.data);
+}
+
+export function cancelWorkOrder(id: number) {
+  return client
+    .post<WorkOrderOut>(`/work-orders/${id}/cancel`)
+    .then((r) => r.data);
+}
+
+export function completeWorkOrder(id: number) {
+  return client
+    .post<WorkOrderOut>(`/work-orders/${id}/complete`)
+    .then((r) => r.data);
+}

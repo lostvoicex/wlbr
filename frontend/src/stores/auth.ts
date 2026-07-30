@@ -1,44 +1,78 @@
-#!/usr/bin/env bash
-# 后端启动脚本（Render 生产环境用）
-# 功能：1) 转换 DATABASE_URL 格式  2) 执行 Alembic 迁移  3) 启动 FastAPI
+import { defineStore } from "pinia";
+import { computed, ref } from "vue";
 
-set -e
+type Role = "student" | "teacher" | "admin" | "";
 
-echo "========== 瓦力贝尔后端启动 =========="
+const STORAGE_KEY = "wali_bell_auth";
 
-# Render 提供的 DATABASE_URL 是 postgres://，需转换为 postgresql+psycopg://
-if [ -n "$DATABASE_URL" ]; then
-  export DATABASE_URL="${DATABASE_URL/postgres:\/\//postgresql+psycopg:\/\/}"
-  echo "数据库连接串: $DATABASE_URL"
-fi
+interface Persisted {
+  access: string;
+  refresh: string;
+  role: Role;
+  subject: string;
+}
 
-# 确保 SQLite 数据目录存在
-mkdir -p ./data
+function loadFromStorage(): Persisted | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as Persisted;
+  } catch {
+    return null;
+  }
+}
 
-# 执行 Alembic 迁移（自动升级到最新版本）
-echo "执行数据库迁移..."
-alembic upgrade head
+export const useAuthStore = defineStore("auth", () => {
+  const persisted = loadFromStorage();
+  const accessToken = ref<string>((persisted && persisted.access) || "");
+  const refreshToken = ref<string>((persisted && persisted.refresh) || "");
+  const role = ref<Role>(((persisted && persisted.role) || "") as Role);
+  const subject = ref<string>((persisted && persisted.subject) || "");
 
-# 检查是否已有种子数据，没有则初始化
-echo "检查种子数据..."
-SEED_CHECK=$(python -c "
-from app.db import SessionLocal
-from app.models.question import Question
-db = SessionLocal()
-count = db.query(Question).count()
-print(count)
-db.close()
-" 2>/dev/null || echo "0")
+  const isLoggedIn = computed(() => !!accessToken.value);
+  const isStudent = computed(() => role.value === "student");
+  const isStaff = computed(
+    () => role.value === "teacher" || role.value === "admin",
+  );
 
-if [ "$SEED_CHECK" = "0" ]; then
-  echo "首次部署，初始化演示数据（486题 + 5位学员）..."
-  python -m app.seed
-  echo "种子数据初始化完成"
-else
-  echo "已有 $SEED_CHECK 道题目，跳过种子数据初始化"
-fi
+  function setAuth(payload: {
+    access_token: string;
+    refresh_token: string;
+    role: string;
+    subject: string;
+  }) {
+    accessToken.value = payload.access_token;
+    refreshToken.value = payload.refresh_token;
+    role.value = payload.role as Role;
+    subject.value = payload.subject;
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        access: payload.access_token,
+        refresh: payload.refresh_token,
+        role: payload.role,
+        subject: payload.subject,
+      }),
+    );
+  }
 
-# 启动 FastAPI（Koyeb/Render 都通过 PORT 环境变量指定端口）
-PORT="${PORT:-8000}"
-echo "启动服务，端口: $PORT"
-exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
+  function clear() {
+    accessToken.value = "";
+    refreshToken.value = "";
+    role.value = "";
+    subject.value = "";
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  return {
+    accessToken,
+    refreshToken,
+    role,
+    subject,
+    isLoggedIn,
+    isStudent,
+    isStaff,
+    setAuth,
+    clear,
+  };
+});

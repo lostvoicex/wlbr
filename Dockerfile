@@ -1,55 +1,22 @@
-name: 部署前端到 GitHub Pages
+FROM python:3.10-slim
 
-on:
-  push:
-    branches: [main]
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/deploy-frontend.yml'
+# 安装 g++ 用于 C++ 判题（可选功能）
+RUN apt-get update && apt-get install -y --no-install-recommends g++ && rm -rf /var/lib/apt/lists/*
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+WORKDIR /app
 
-concurrency:
-  group: pages
-  cancel-in-progress: true
+# 先复制依赖文件，利用 Docker 缓存层
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+# 复制后端代码
+COPY backend/ .
 
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
+# 默认端口（Render/Fly.io/Koyeb 通过 PORT 环境变量注入）
+ENV PORT=8000
+# SQLite 数据存放到持久化卷（Fly.io）或当前目录（Render/本地）
+ENV DATABASE_URL=sqlite:///./data/wali_bell.db
+EXPOSE 8000
 
-      - name: 安装 Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: 安装依赖
-        working-directory: frontend
-        run: npm install
-
-      - name: 构建
-        working-directory: frontend
-        run: npx vite build
-        env:
-          VITE_API_BASE_URL: https://wali-bell-backend.fly.dev/api/v1
-
-      - name: 设置 Pages
-        uses: actions/configure-pages@v4
-
-      - name: 上传构建产物
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: frontend/dist
-
-      - name: 部署到 GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+# 启动：迁移 + 种子数据初始化 + uvicorn
+CMD ["bash", "start.sh"]

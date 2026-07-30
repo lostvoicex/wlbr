@@ -1,44 +1,124 @@
-#!/usr/bin/env bash
-# 后端启动脚本（Render 生产环境用）
-# 功能：1) 转换 DATABASE_URL 格式  2) 执行 Alembic 迁移  3) 启动 FastAPI
+import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
+import { useAuthStore } from "@/stores/auth";
+import brand from "@/config/brand";
 
-set -e
+function requireAdmin(_to: any, _from: any, next: (arg?: string) => void) {
+  const auth = useAuthStore();
+  if (auth.role === "admin") {
+    next();
+  } else {
+    next("/teacher/students");
+  }
+}
 
-echo "========== 瓦力贝尔后端启动 =========="
+const routes: RouteRecordRaw[] = [
+  {
+    path: "/",
+    redirect: "/student/login",
+  },
+  // ---------- 学员端 ----------
+  {
+    path: "/student/login",
+    name: "StudentLogin",
+    component: () => import("@/views/student/StudentLogin.vue"),
+    meta: { side: "kid" },
+  },
+  {
+    path: "/student/home",
+    name: "StudentHome",
+    component: () => import("@/views/student/StudentHome.vue"),
+    meta: { side: "kid", requiresRole: "student" },
+  },
+  {
+    path: "/student/diagnosis/:syllabus_target",
+    name: "StudentDiagnosis",
+    component: () => import("@/views/student/StudentDiagnosis.vue"),
+    meta: { side: "kid", requiresRole: "student" },
+  },
+  {
+    path: "/student/result/:session_id",
+    name: "StudentResult",
+    component: () => import("@/views/student/StudentResult.vue"),
+    meta: { side: "kid", requiresRole: "student" },
+  },
+  // ---------- 老师端 ----------
+  {
+    path: "/teacher/login",
+    name: "TeacherLogin",
+    component: () => import("@/views/teacher/TeacherLogin.vue"),
+    meta: { side: "teacher" },
+  },
+  {
+    path: "/teacher",
+    component: () => import("@/views/teacher/TeacherLayout.vue"),
+    meta: { side: "teacher", requiresRole: "staff" },
+    children: [
+      {
+        path: "",
+        redirect: "/teacher/students",
+      },
+      {
+        path: "students",
+        name: "TeacherStudents",
+        component: () => import("@/views/teacher/TeacherStudents.vue"),
+      },
+      {
+        path: "work-orders",
+        name: "TeacherWorkOrders",
+        component: () => import("@/views/teacher/TeacherWorkOrders.vue"),
+      },
+      {
+        path: "mappings",
+        name: "TeacherMappings",
+        component: () => import("@/views/teacher/TeacherMappings.vue"),
+      },
+      {
+        path: "teachers",
+        name: "TeacherTeachers",
+        component: () => import("@/views/teacher/TeacherTeachers.vue"),
+        beforeEnter: requireAdmin,
+      },
+      {
+        path: "data-admin",
+        name: "TeacherDataAdmin",
+        component: () => import("@/views/teacher/TeacherDataAdmin.vue"),
+        beforeEnter: requireAdmin,
+      },
+    ],
+  },
+  {
+    path: "/:pathMatch(.*)*",
+    redirect: "/student/login",
+  },
+];
 
-# Render 提供的 DATABASE_URL 是 postgres://，需转换为 postgresql+psycopg://
-if [ -n "$DATABASE_URL" ]; then
-  export DATABASE_URL="${DATABASE_URL/postgres:\/\//postgresql+psycopg:\/\/}"
-  echo "数据库连接串: $DATABASE_URL"
-fi
+// GitHub Pages 部署在子路径 /wlbr/ 下，需要同步 router base
+const routerBase = import.meta.env.BASE_URL;
 
-# 确保 SQLite 数据目录存在
-mkdir -p ./data
+const router = createRouter({
+  history: createWebHistory(routerBase),
+  routes,
+});
 
-# 执行 Alembic 迁移（自动升级到最新版本）
-echo "执行数据库迁移..."
-alembic upgrade head
+router.beforeEach((to) => {
+  // 按端动态设置浏览器标题
+  const side = to.meta && to.meta.side;
+  if (side === "kid") {
+    document.title = brand.platformNameStudent;
+  } else if (side === "teacher") {
+    document.title = brand.platformNameTeacher;
+  }
 
-# 检查是否已有种子数据，没有则初始化
-echo "检查种子数据..."
-SEED_CHECK=$(python -c "
-from app.db import SessionLocal
-from app.models.question import Question
-db = SessionLocal()
-count = db.query(Question).count()
-print(count)
-db.close()
-" 2>/dev/null || echo "0")
+  const auth = useAuthStore();
+  const required = (to.meta && to.meta.requiresRole) as string | undefined;
+  if (!required) return true;
 
-if [ "$SEED_CHECK" = "0" ]; then
-  echo "首次部署，初始化演示数据（486题 + 5位学员）..."
-  python -m app.seed
-  echo "种子数据初始化完成"
-else
-  echo "已有 $SEED_CHECK 道题目，跳过种子数据初始化"
-fi
+  if (required === "student") {
+    if (!auth.isLoggedIn || !auth.isStudent) return "/student/login";
+  } else if (required === "staff") {
+    if (!auth.isLoggedIn || !auth.isStaff) return "/teacher/login";
+  }
+  return true;
+});
 
-# 启动 FastAPI（Koyeb/Render 都通过 PORT 环境变量指定端口）
-PORT="${PORT:-8000}"
-echo "启动服务，端口: $PORT"
-exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
+export default router;
