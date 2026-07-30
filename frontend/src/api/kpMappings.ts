@@ -1,117 +1,44 @@
-import client from "./client";
+#!/usr/bin/env bash
+# 后端启动脚本（Render 生产环境用）
+# 功能：1) 转换 DATABASE_URL 格式  2) 执行 Alembic 迁移  3) 启动 FastAPI
 
-export interface KpMappingOut {
-  id: number;
-  syllabus_version: string;
-  knowledge_point: string;
-  courseware_name: string;
-  chapter: string;
-  page_ref: string | null;
-  chapter_title: string | null;
-  match_score: number;
-  source: string; // ai / manual / import
-  review_status: string; // pending / approved / rejected / needs_review
-  review_level: number; // 1-5
-  is_active: boolean;
-  sort_order: number;
-  reviewer1_id: number | null;
-  reviewer2_id: number | null;
-  review_note: string | null;
-  created_at: string;
-  updated_at: string;
-}
+set -e
 
-export interface KpMappingListResp {
-  total: number;
-  page: number;
-  page_size: number;
-  items: KpMappingOut[];
-}
+echo "========== 瓦力贝尔后端启动 =========="
 
-export interface MappingReviewOut {
-  id: number;
-  mapping_id: number;
-  reviewer_id: number | null;
-  reviewer_name: string | null;
-  review_round: number;
-  result: string;
-  review_level: number;
-  note: string | null;
-  created_at: string;
-}
+# Render 提供的 DATABASE_URL 是 postgres://，需转换为 postgresql+psycopg://
+if [ -n "$DATABASE_URL" ]; then
+  export DATABASE_URL="${DATABASE_URL/postgres:\/\//postgresql+psycopg:\/\/}"
+  echo "数据库连接串: $DATABASE_URL"
+fi
 
-export interface MappingCreate {
-  syllabus_version: string;
-  knowledge_point: string;
-  courseware_name: string;
-  chapter: string;
-  page_ref?: string;
-  chapter_title?: string;
-  match_score?: number;
-  source?: string;
-  sort_order?: number;
-}
+# 确保 SQLite 数据目录存在
+mkdir -p ./data
 
-export interface MappingUpdate {
-  syllabus_version?: string;
-  knowledge_point?: string;
-  courseware_name?: string;
-  chapter?: string;
-  page_ref?: string;
-  chapter_title?: string;
-  match_score?: number;
-  is_active?: boolean;
-  sort_order?: number;
-}
+# 执行 Alembic 迁移（自动升级到最新版本）
+echo "执行数据库迁移..."
+alembic upgrade head
 
-export interface MappingReviewInput {
-  result: string; // approved / rejected / needs_review
-  review_level: number; // 1-5
-  note?: string;
-}
+# 检查是否已有种子数据，没有则初始化
+echo "检查种子数据..."
+SEED_CHECK=$(python -c "
+from app.db import SessionLocal
+from app.models.question import Question
+db = SessionLocal()
+count = db.query(Question).count()
+print(count)
+db.close()
+" 2>/dev/null || echo "0")
 
-export function listMappings(params: {
-  keyword?: string;
-  syllabus_version?: string;
-  knowledge_point?: string;
-  courseware_name?: string;
-  review_status?: string;
-  source?: string;
-  is_active?: boolean;
-  page?: number;
-  page_size?: number;
-}) {
-  return client
-    .get<KpMappingListResp>("/kp-mappings", { params })
-    .then((r) => r.data);
-}
+if [ "$SEED_CHECK" = "0" ]; then
+  echo "首次部署，初始化演示数据（486题 + 5位学员）..."
+  python -m app.seed
+  echo "种子数据初始化完成"
+else
+  echo "已有 $SEED_CHECK 道题目，跳过种子数据初始化"
+fi
 
-export function getMapping(id: number) {
-  return client.get<KpMappingOut>(`/kp-mappings/${id}`).then((r) => r.data);
-}
-
-export function createMapping(data: MappingCreate) {
-  return client.post<KpMappingOut>("/kp-mappings", data).then((r) => r.data);
-}
-
-export function updateMapping(id: number, data: MappingUpdate) {
-  return client
-    .put<KpMappingOut>(`/kp-mappings/${id}`, data)
-    .then((r) => r.data);
-}
-
-export function deleteMapping(id: number) {
-  return client.delete<void>(`/kp-mappings/${id}`).then((r) => r.data);
-}
-
-export function reviewMapping(id: number, data: MappingReviewInput) {
-  return client
-    .post<KpMappingOut>(`/kp-mappings/${id}/review`, data)
-    .then((r) => r.data);
-}
-
-export function listMappingReviews(id: number) {
-  return client
-    .get<MappingReviewOut[]>(`/kp-mappings/${id}/reviews`)
-    .then((r) => r.data);
-}
+# 启动 FastAPI（Koyeb/Render 都通过 PORT 环境变量指定端口）
+PORT="${PORT:-8000}"
+echo "启动服务，端口: $PORT"
+exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"

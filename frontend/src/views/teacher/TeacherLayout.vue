@@ -1,119 +1,44 @@
-<script setup lang="ts">
-import { computed } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { useAuthStore } from "@/stores/auth";
-import BrandLogo from "@/components/BrandLogo.vue";
-import brand from "@/config/brand";
+#!/usr/bin/env bash
+# 后端启动脚本（Render 生产环境用）
+# 功能：1) 转换 DATABASE_URL 格式  2) 执行 Alembic 迁移  3) 启动 FastAPI
 
-const route = useRoute();
-const router = useRouter();
-const auth = useAuthStore();
+set -e
 
-const activeKey = computed(() =>
-  route.name ? route.name.toString() : "TeacherStudents",
-);
+echo "========== 瓦力贝尔后端启动 =========="
 
-const isAdmin = computed(() => auth.role === "admin");
+# Render 提供的 DATABASE_URL 是 postgres://，需转换为 postgresql+psycopg://
+if [ -n "$DATABASE_URL" ]; then
+  export DATABASE_URL="${DATABASE_URL/postgres:\/\//postgresql+psycopg:\/\/}"
+  echo "数据库连接串: $DATABASE_URL"
+fi
 
-function go(name: string) {
-  router.push({ name });
-}
+# 确保 SQLite 数据目录存在
+mkdir -p ./data
 
-function onMenuClick(info: { key: string | number }) {
-  go(String(info.key));
-}
+# 执行 Alembic 迁移（自动升级到最新版本）
+echo "执行数据库迁移..."
+alembic upgrade head
 
-function logout() {
-  auth.clear();
-  router.replace("/teacher/login");
-}
-</script>
+# 检查是否已有种子数据，没有则初始化
+echo "检查种子数据..."
+SEED_CHECK=$(python -c "
+from app.db import SessionLocal
+from app.models.question import Question
+db = SessionLocal()
+count = db.query(Question).count()
+print(count)
+db.close()
+" 2>/dev/null || echo "0")
 
-<template>
-  <a-layout class="teacher-app" style="min-height: 100vh">
-    <a-layout-sider width="220" theme="light" class="sider">
-      <div class="brand">
-        <BrandLogo which="teacher" :size="36" />
-        <div>
-          <div class="name">{{ brand.platformNameTeacher }}</div>
-          <div class="tag">教师工作台</div>
-        </div>
-      </div>
-      <a-menu
-        mode="inline"
-        :selected-keys="[activeKey]"
-        @click="onMenuClick"
-      >
-        <a-menu-item key="TeacherStudents">学员列表</a-menu-item>
-        <a-menu-item key="TeacherWorkOrders">补课工单</a-menu-item>
-        <a-menu-item key="TeacherMappings">映射二审</a-menu-item>
-        <a-menu-item key="TeacherTeachers" v-if="isAdmin">教师管理</a-menu-item>
-        <a-menu-item key="TeacherDataAdmin" v-if="isAdmin">资料管理</a-menu-item>
-      </a-menu>
-    </a-layout-sider>
+if [ "$SEED_CHECK" = "0" ]; then
+  echo "首次部署，初始化演示数据（486题 + 5位学员）..."
+  python -m app.seed
+  echo "种子数据初始化完成"
+else
+  echo "已有 $SEED_CHECK 道题目，跳过种子数据初始化"
+fi
 
-    <a-layout>
-      <a-layout-header class="header">
-        <div class="header-title">教师工作台</div>
-        <div class="header-right">
-          <span class="user">{{ auth.subject || "-" }}</span>
-          <a-button size="small" @click="logout">退出</a-button>
-        </div>
-      </a-layout-header>
-      <a-layout-content class="content">
-        <router-view />
-      </a-layout-content>
-    </a-layout>
-  </a-layout>
-</template>
-
-<style scoped>
-.sider {
-  border-right: 1px solid var(--color-border-teacher);
-  padding: 20px 0;
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 20px 20px;
-  border-bottom: 1px solid var(--color-border-teacher);
-  margin-bottom: 12px;
-}
-.name {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--color-text);
-  line-height: 1.25;
-}
-.tag {
-  font-size: 12px;
-  color: var(--color-text-sub);
-}
-.header {
-  background: #fff;
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--color-border-teacher);
-}
-.header-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text);
-}
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.user {
-  color: var(--color-text-sub);
-  font-size: 13px;
-}
-.content {
-  padding: 24px;
-  background: var(--color-bg-teacher);
-}
-</style>
+# 启动 FastAPI（Koyeb/Render 都通过 PORT 环境变量指定端口）
+PORT="${PORT:-8000}"
+echo "启动服务，端口: $PORT"
+exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"

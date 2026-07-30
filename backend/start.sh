@@ -9,8 +9,11 @@ echo "========== 瓦力贝尔后端启动 =========="
 # Render 提供的 DATABASE_URL 是 postgres://，需转换为 postgresql+psycopg://
 if [ -n "$DATABASE_URL" ]; then
   export DATABASE_URL="${DATABASE_URL/postgres:\/\//postgresql+psycopg:\/\/}"
-  echo "数据库连接串已转换"
+  echo "数据库连接串: $DATABASE_URL"
 fi
+
+# 确保 SQLite 数据目录存在
+mkdir -p ./data
 
 # 执行 Alembic 迁移（自动升级到最新版本）
 echo "执行数据库迁移..."

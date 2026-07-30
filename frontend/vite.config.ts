@@ -1,89 +1,44 @@
-import { defineConfig, loadEnv } from "vite";
-import vue from "@vitejs/plugin-vue";
-import path from "node:path";
+#!/usr/bin/env bash
+# 后端启动脚本（Render 生产环境用）
+# 功能：1) 转换 DATABASE_URL 格式  2) 执行 Alembic 迁移  3) 启动 FastAPI
 
-// 前端端口取自 DEPLOY_RUN_PORT（沙箱主仓固定 5000；worktree 由沙箱注入）
-const FRONTEND_PORT = Number(process.env.DEPLOY_RUN_PORT || 5000);
-const BACKEND_PORT = Number(process.env.BACKEND_PORT || 8000);
+set -e
 
-export default defineConfig(({ mode }) => {
-  loadEnv(mode, process.cwd(), "");
-  // GitHub Pages 部署需要 base 路径（仓库名）
-  // 本地开发时 base 为 '/'
-  const isGithubPages = process.env.GITHUB_ACTIONS === "true";
-  return {
-    base: isGithubPages ? "/wlbr/" : "/",
-    plugins: [vue()],
-    resolve: {
-      alias: {
-        "@": path.resolve(__dirname, "src"),
-      },
-    },
-    server: {
-      host: "0.0.0.0",
-      port: FRONTEND_PORT,
-      strictPort: true,
-      proxy: {
-        "/api": {
-          target: `http://127.0.0.1:${BACKEND_PORT}`,
-          changeOrigin: true,
-        },
-      },
-    },
-    preview: {
-      host: "0.0.0.0",
-      port: FRONTEND_PORT,
-      strictPort: true,
-      // 生产模式下同样把 /api 转发到后端 FastAPI（沙箱内部 8000）
-      proxy: {
-        "/api": {
-          target: `http://127.0.0.1:${BACKEND_PORT}`,
-          changeOrigin: true,
-        },
-      },
-      // 允许沙箱公网域名做 Host 头（vite preview 6.x 默认只白名单 localhost）
-      allowedHosts: true,
-    },
-    // 生产构建降级到 ES2015 兼容老浏览器；开发模式保持 esnext 避免 esbuild
-    // 错误替换 import.meta（Vite HMR 依赖 import.meta.hot）
-    build: {
-      target: "es2015",
-      rollupOptions: {
-        output: {
-          manualChunks(id) {
-            // Windows 路径可能使用反斜杠，统一处理
-            const normalizedId = id.replace(/\\/g, "/");
-            // 将 node_modules 中的第三方库拆分为 vendor chunk
-            if (normalizedId.includes("/node_modules/")) {
-              if (
-                normalizedId.includes("/vue/") ||
-                normalizedId.includes("vue-router") ||
-                normalizedId.includes("pinia")
-              ) {
-                return "vendor-vue";
-              }
-              if (
-                normalizedId.includes("ant-design-vue") ||
-                normalizedId.includes("@ant-design")
-              ) {
-                return "vendor-antdv";
-              }
-              // 其他第三方库统一放一个 chunk
-              return "vendor";
-            }
-          },
-        },
-      },
-      // 大 chunk 报警阈值（字节），超过会在构建日志提示
-      chunkSizeWarningLimit: 500,
-    },
-    esbuild: {
-      target: mode === "production" ? "es2015" : "esnext",
-    },
-    optimizeDeps: {
-      esbuildOptions: {
-        target: mode === "production" ? "es2015" : "esnext",
-      },
-    },
-  };
-});
+echo "========== 瓦力贝尔后端启动 =========="
+
+# Render 提供的 DATABASE_URL 是 postgres://，需转换为 postgresql+psycopg://
+if [ -n "$DATABASE_URL" ]; then
+  export DATABASE_URL="${DATABASE_URL/postgres:\/\//postgresql+psycopg:\/\/}"
+  echo "数据库连接串: $DATABASE_URL"
+fi
+
+# 确保 SQLite 数据目录存在
+mkdir -p ./data
+
+# 执行 Alembic 迁移（自动升级到最新版本）
+echo "执行数据库迁移..."
+alembic upgrade head
+
+# 检查是否已有种子数据，没有则初始化
+echo "检查种子数据..."
+SEED_CHECK=$(python -c "
+from app.db import SessionLocal
+from app.models.question import Question
+db = SessionLocal()
+count = db.query(Question).count()
+print(count)
+db.close()
+" 2>/dev/null || echo "0")
+
+if [ "$SEED_CHECK" = "0" ]; then
+  echo "首次部署，初始化演示数据（486题 + 5位学员）..."
+  python -m app.seed
+  echo "种子数据初始化完成"
+else
+  echo "已有 $SEED_CHECK 道题目，跳过种子数据初始化"
+fi
+
+# 启动 FastAPI（Koyeb/Render 都通过 PORT 环境变量指定端口）
+PORT="${PORT:-8000}"
+echo "启动服务，端口: $PORT"
+exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"

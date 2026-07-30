@@ -1,152 +1,44 @@
-import client from "./client";
+#!/usr/bin/env bash
+# 后端启动脚本（Render 生产环境用）
+# 功能：1) 转换 DATABASE_URL 格式  2) 执行 Alembic 迁移  3) 启动 FastAPI
 
-export interface QuestionForStudent {
-  id: number;
-  knowledge_point: string;
-  q_type: "single" | "judge" | "coding" | "program";
-  content: string;
-  difficulty: number;
-  /** 编程题（积木排序）的候选积木块列表（后端按答案顺序给出，前端负责打乱展示） */
-  blocks?: string[] | null;
-  /** program 题（编程大题）的判题规则（脱敏后，学员端只看到检查数量/测试用例输入） */
-  grading_rules_parsed?: unknown;
-  /** program 题的编程语言：scratch / python / cpp */
-  program_lang?: "scratch" | "python" | "cpp" | null;
-}
+set -e
 
-export interface StartPayload {
-  syllabus_target: string;
-  count?: number;
-  /** 会话类型：diagnosis（诊断） / retest_t1（复测一） / retest_t2（复测二） */
-  session_type?: string;
-}
+echo "========== 瓦力贝尔后端启动 =========="
 
-export interface StartResponse {
-  session_id: number;
-  total_count: number;
-  syllabus_target: string;
-  session_type: string;
-  questions: QuestionForStudent[];
-}
+# Render 提供的 DATABASE_URL 是 postgres://，需转换为 postgresql+psycopg://
+if [ -n "$DATABASE_URL" ]; then
+  export DATABASE_URL="${DATABASE_URL/postgres:\/\//postgresql+psycopg:\/\/}"
+  echo "数据库连接串: $DATABASE_URL"
+fi
 
-export interface AnswerResponse {
-  is_correct: boolean;
-  correct_count: number;
-  total_count: number;
-}
+# 确保 SQLite 数据目录存在
+mkdir -p ./data
 
-export interface FinishResponse {
-  session_id: number;
-  result_url: string;
-  total_rate: number;
-}
+# 执行 Alembic 迁移（自动升级到最新版本）
+echo "执行数据库迁移..."
+alembic upgrade head
 
-export interface PerKpResult {
-  knowledge_point: string;
-  correct_count: number;
-  total_count: number;
-  correct_rate: number;
-  mastery_level: "mastered" | "need_review" | "need_repair";
-  low_confidence: boolean;
-  /** 关联的奇码课件章节，如 "奇码教材 · 第3章 · P25-28" */
-  ppt_ref: string | null;
-}
+# 检查是否已有种子数据，没有则初始化
+echo "检查种子数据..."
+SEED_CHECK=$(python -c "
+from app.db import SessionLocal
+from app.models.question import Question
+db = SessionLocal()
+count = db.query(Question).count()
+print(count)
+db.close()
+" 2>/dev/null || echo "0")
 
-export interface RetestPlan {
-  /** 复测T1日期，ISO格式如 "2026-07-27" */
-  t1_at: string | null;
-  /** 复测T2日期，ISO格式如 "2026-07-31" */
-  t2_at: string | null;
-  t1_days: number;
-  t2_days: number;
-  t1_hint: string;
-  t2_hint: string;
-}
+if [ "$SEED_CHECK" = "0" ]; then
+  echo "首次部署，初始化演示数据（486题 + 5位学员）..."
+  python -m app.seed
+  echo "种子数据初始化完成"
+else
+  echo "已有 $SEED_CHECK 道题目，跳过种子数据初始化"
+fi
 
-export interface ResultResponse {
-  session_id: number;
-  student_id: number;
-  syllabus_target: string;
-  /** 本次会话类型：diagnosis / retest_t1 / retest_t2 */
-  session_type: string;
-  total_count: number;
-  correct_count: number;
-  total_rate: number;
-  badge: "champion" | "cheer" | "together";
-  started_at: string;
-  finished_at: string | null;
-  per_kp: PerKpResult[];
-  retest_plan: RetestPlan;
-}
-
-export interface WeightedKpItem {
-  knowledge_point: string;
-  correct_count: number;
-  total_count: number;
-  weighted_rate: number;
-  mastery_level: string;
-  sources: string[];
-  ppt_ref: string | null;
-}
-
-export interface WeightedResultResponse {
-  student_id: number;
-  syllabus_target: string;
-  total_kp: number;
-  items: WeightedKpItem[];
-}
-
-export function startSession(payload: StartPayload) {
-  return client
-    .post<StartResponse>("/diagnosis-sessions/start", payload)
-    .then((r) => r.data);
-}
-
-export function submitAnswer(
-  sessionId: number,
-  payload: { question_id: number; student_answer: string; answer_duration_sec?: number },
-) {
-  return client
-    .post<AnswerResponse>(`/diagnosis-sessions/${sessionId}/answer`, payload)
-    .then((r) => r.data);
-}
-
-/** 上报切屏事件（反作弊） */
-export function reportTabSwitch(
-  sessionId: number,
-  payload: { event_type: "hide" | "show"; away_duration_sec?: number; page_info?: string },
-) {
-  return client
-    .post(`/diagnosis-sessions/${sessionId}/tab-switch`, payload)
-    .then((r) => r.data);
-}
-
-export function finishSession(sessionId: number) {
-  return client
-    .post<FinishResponse>(`/diagnosis-sessions/${sessionId}/finish`)
-    .then((r) => r.data);
-}
-
-export function getResult(sessionId: number) {
-  return client
-    .get<ResultResponse>(`/diagnosis-sessions/${sessionId}/result`)
-    .then((r) => r.data);
-}
-
-/** 获取学员加权掌握度总览（T1×0.3 + T2×0.7） */
-export function getWeightedResult(syllabus_target: string) {
-  return client
-    .get<WeightedResultResponse>("/diagnosis-sessions/weighted-result", {
-      params: { syllabus_target },
-    })
-    .then((r) => r.data);
-}
-
-/** 学员把诊断报告分享给老师（创建补课工单） */
-export function shareReportToTeacher(sessionId: number) {
-  return client
-    .post<{ ok: boolean; work_order_id: number; message: string }>(
-      `/diagnosis-sessions/${sessionId}/share-to-teacher`,
-    )
-    .then((r) => r.data);
-}
+# 启动 FastAPI（Koyeb/Render 都通过 PORT 环境变量指定端口）
+PORT="${PORT:-8000}"
+echo "启动服务，端口: $PORT"
+exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"

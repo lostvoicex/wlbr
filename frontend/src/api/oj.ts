@@ -1,99 +1,44 @@
-import client from "./client";
+#!/usr/bin/env bash
+# 后端启动脚本（Render 生产环境用）
+# 功能：1) 转换 DATABASE_URL 格式  2) 执行 Alembic 迁移  3) 启动 FastAPI
 
-/** 编程大题语言 */
-export type ProgramLang = "scratch" | "python" | "cpp";
+set -e
 
-/** 判题结果 */
-export type Verdict =
-  | "pending"
-  | "judging"
-  | "accepted"
-  | "wrong_answer"
-  | "compile_error"
-  | "runtime_error"
-  | "time_limit"
-  | "partial";
+echo "========== 瓦力贝尔后端启动 =========="
 
-/** 脱敏后的判题规则（学员端展示用） */
-export interface GradingRulesParsed {
-  // Python/C++ 题：隐藏 expected 字段
-  language?: string;
-  time_limit?: number;
-  memory_limit?: number;
-  test_case_count?: number;
-  test_cases?: { input: string; hint: string }[];
-  // Scratch 题：只返回规则数量
-  check_count?: number;
-}
+# Render 提供的 DATABASE_URL 是 postgres://，需转换为 postgresql+psycopg://
+if [ -n "$DATABASE_URL" ]; then
+  export DATABASE_URL="${DATABASE_URL/postgres:\/\//postgresql+psycopg:\/\/}"
+  echo "数据库连接串: $DATABASE_URL"
+fi
 
-/** 编程大题信息 */
-export interface OjProblemInfo {
-  id: number;
-  knowledge_point: string;
-  content: string;
-  program_lang: ProgramLang;
-  grading_rules_parsed: GradingRulesParsed | null;
-}
+# 确保 SQLite 数据目录存在
+mkdir -p ./data
 
-/** 提交请求 */
-export interface OjSubmitPayload {
-  question_id: number;
-  session_id?: number | null;
-  language: ProgramLang;
-  code: string;
-}
+# 执行 Alembic 迁移（自动升级到最新版本）
+echo "执行数据库迁移..."
+alembic upgrade head
 
-/** 提交响应（判题结果） */
-export interface OjSubmitResponse {
-  submission_id: number;
-  question_id: number;
-  language: ProgramLang;
-  verdict: Verdict;
-  score: number;
-  passed_cases: number;
-  total_cases: number;
-  details: unknown | null;
-  stderr: string | null;
-  judge_duration_ms: number | null;
-  created_at: string;
-}
+# 检查是否已有种子数据，没有则初始化
+echo "检查种子数据..."
+SEED_CHECK=$(python -c "
+from app.db import SessionLocal
+from app.models.question import Question
+db = SessionLocal()
+count = db.query(Question).count()
+print(count)
+db.close()
+" 2>/dev/null || echo "0")
 
-/** 获取编程大题信息（脱敏） */
-export function getProblem(questionId: number) {
-  return client
-    .get<OjProblemInfo>(`/oj/problem/${questionId}`)
-    .then((r) => r.data);
-}
+if [ "$SEED_CHECK" = "0" ]; then
+  echo "首次部署，初始化演示数据（486题 + 5位学员）..."
+  python -m app.seed
+  echo "种子数据初始化完成"
+else
+  echo "已有 $SEED_CHECK 道题目，跳过种子数据初始化"
+fi
 
-/** 提交编程大题并获取判题结果 */
-export function submitCode(payload: OjSubmitPayload) {
-  return client
-    .post<OjSubmitResponse>("/oj/submit", payload, { timeout: 30000 })
-    .then((r) => r.data);
-}
-
-/** 查询某次提交结果 */
-export function getSubmission(submissionId: number) {
-  return client
-    .get<OjSubmitResponse>(`/oj/submissions/${submissionId}`)
-    .then((r) => r.data);
-}
-
-/** 学员提交历史列表 */
-export function listSubmissions(params: {
-  question_id?: number;
-  session_id?: number;
-  page?: number;
-  page_size?: number;
-}) {
-  return client
-    .get("/oj/submissions", { params })
-    .then((r) => r.data);
-}
-
-/** 学员在某道编程题的历史提交 */
-export function getQuestionHistory(questionId: number, limit = 10) {
-  return client
-    .get(`/oj/history/${questionId}`, { params: { limit } })
-    .then((r) => r.data);
-}
+# 启动 FastAPI（Koyeb/Render 都通过 PORT 环境变量指定端口）
+PORT="${PORT:-8000}"
+echo "启动服务，端口: $PORT"
+exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"

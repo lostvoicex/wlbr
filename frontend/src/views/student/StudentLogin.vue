@@ -1,224 +1,44 @@
-<script setup lang="ts">
-import { ref } from "vue";
-import { useRouter } from "vue-router";
-import { message } from "ant-design-vue";
-import { login } from "@/api/auth";
-import { extractErrorMessage } from "@/api/client";
-import { useAuthStore } from "@/stores/auth";
-import BrandLogo from "@/components/BrandLogo.vue";
-import brand from "@/config/brand";
+#!/usr/bin/env bash
+# 后端启动脚本（Render 生产环境用）
+# 功能：1) 转换 DATABASE_URL 格式  2) 执行 Alembic 迁移  3) 启动 FastAPI
 
-const router = useRouter();
-const auth = useAuthStore();
+set -e
 
-type Tab = "phone" | "id";
-const tab = ref<Tab>("phone");
-const loading = ref(false);
+echo "========== 瓦力贝尔后端启动 =========="
 
-const phone = ref("");
-const code = ref("");
-const studentId = ref("");
-const password = ref("");
+# Render 提供的 DATABASE_URL 是 postgres://，需转换为 postgresql+psycopg://
+if [ -n "$DATABASE_URL" ]; then
+  export DATABASE_URL="${DATABASE_URL/postgres:\/\//postgresql+psycopg:\/\/}"
+  echo "数据库连接串: $DATABASE_URL"
+fi
 
-async function submit() {
-  loading.value = true;
-  try {
-    if (tab.value === "phone") {
-      if (!/^1\d{10}$/.test(phone.value)) {
-        message.warning("请输入 11 位手机号哦");
-        return;
-      }
-      if (!/^\d{4,6}$/.test(code.value)) {
-        message.warning("验证码是 4-6 位数字");
-        return;
-      }
-      const data = await login({
-        mode: "student_phone",
-        account: phone.value,
-        credential: code.value,
-      });
-      auth.setAuth(data);
-    } else {
-      if (!studentId.value.trim() || !password.value) {
-        message.warning("请把学号和密码填完整");
-        return;
-      }
-      const data = await login({
-        mode: "student_id",
-        account: studentId.value.trim(),
-        credential: password.value,
-      });
-      auth.setAuth(data);
-    }
-    message.success("欢迎回来，准备好闯关啦！");
-    router.push("/student/home");
-  } catch (e) {
-    message.error(extractErrorMessage(e, "再试一次！"));
-  } finally {
-    loading.value = false;
-  }
-}
-</script>
+# 确保 SQLite 数据目录存在
+mkdir -p ./data
 
-<template>
-  <div class="kid-app center-page">
-    <div class="max-w-480 kid-card">
-      <div class="logo-row">
-        <BrandLogo which="student" :size="56" />
-        <div>
-          <div class="brand-name">{{ brand.platformNameStudent }}</div>
-          <div class="brand-tag">编程闯关小工坊</div>
-        </div>
-      </div>
+# 执行 Alembic 迁移（自动升级到最新版本）
+echo "执行数据库迁移..."
+alembic upgrade head
 
-      <h1 class="kid-title">你好呀，小小工程师！</h1>
-      <p class="kid-subtitle">选一种方式登录，就能开始今天的编程闯关啦～</p>
+# 检查是否已有种子数据，没有则初始化
+echo "检查种子数据..."
+SEED_CHECK=$(python -c "
+from app.db import SessionLocal
+from app.models.question import Question
+db = SessionLocal()
+count = db.query(Question).count()
+print(count)
+db.close()
+" 2>/dev/null || echo "0")
 
-      <div class="tab-row">
-        <button
-          class="tab-btn"
-          :class="{ active: tab === 'phone' }"
-          @click="tab = 'phone'"
-          type="button"
-        >
-          手机号登录
-        </button>
-        <button
-          class="tab-btn"
-          :class="{ active: tab === 'id' }"
-          @click="tab = 'id'"
-          type="button"
-        >
-          学号登录
-        </button>
-      </div>
+if [ "$SEED_CHECK" = "0" ]; then
+  echo "首次部署，初始化演示数据（486题 + 5位学员）..."
+  python -m app.seed
+  echo "种子数据初始化完成"
+else
+  echo "已有 $SEED_CHECK 道题目，跳过种子数据初始化"
+fi
 
-      <a-form layout="vertical" @submit.prevent="submit">
-        <template v-if="tab === 'phone'">
-          <a-form-item label="家长手机号">
-            <a-input
-              v-model:value="phone"
-              placeholder="11 位手机号"
-              size="large"
-              maxlength="11"
-              allow-clear
-            />
-          </a-form-item>
-          <a-form-item label="验证码">
-            <a-input
-              v-model:value="code"
-              placeholder="4-6 位数字（闯关模式：先随便填就行）"
-              size="large"
-              maxlength="6"
-              allow-clear
-            />
-          </a-form-item>
-        </template>
-
-        <template v-else>
-          <a-form-item label="学号">
-            <a-input
-              v-model:value="studentId"
-              placeholder="老师发给你的学号"
-              size="large"
-              allow-clear
-            />
-          </a-form-item>
-          <a-form-item label="密码">
-            <a-input-password
-              v-model:value="password"
-              placeholder="小小工程师的秘密口令"
-              size="large"
-            />
-          </a-form-item>
-        </template>
-
-        <a-button
-          type="primary"
-          block
-          :loading="loading"
-          html-type="submit"
-          @click="submit"
-        >
-          出发！开始闯关
-        </a-button>
-
-        <div class="switch-row">
-          我是老师？
-          <router-link to="/teacher/login">这里进老师端</router-link>
-        </div>
-      </a-form>
-    </div>
-  </div>
-</template>
-
-<style scoped>
-.logo-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.logo-badge {
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #ff7a45 0%, #faad14 100%);
-  color: #fff;
-  font-size: 24px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 6px 16px rgba(255, 122, 69, 0.32);
-}
-.brand-name {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--color-text);
-}
-.brand-tag {
-  color: var(--color-text-sub);
-  font-size: 13px;
-}
-.tab-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
-  background: #fff5eb;
-  padding: 4px;
-  border-radius: 12px;
-}
-.tab-btn {
-  flex: 1;
-  border: none;
-  background: transparent;
-  padding: 10px 12px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-text-sub);
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 200ms var(--ease-bounce);
-  font-family: inherit;
-}
-.tab-btn.active {
-  background: #fff;
-  color: var(--color-primary);
-  box-shadow: 0 2px 6px rgba(255, 122, 69, 0.16);
-}
-.switch-row {
-  margin-top: 16px;
-  text-align: center;
-  color: var(--color-text-sub);
-  font-size: 14px;
-}
-.switch-row a {
-  color: var(--color-secondary);
-  font-weight: 600;
-  text-decoration: none;
-}
-.switch-row a:hover {
-  text-decoration: underline;
-}
-</style>
+# 启动 FastAPI（Koyeb/Render 都通过 PORT 环境变量指定端口）
+PORT="${PORT:-8000}"
+echo "启动服务，端口: $PORT"
+exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"

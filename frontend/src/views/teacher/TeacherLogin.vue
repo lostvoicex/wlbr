@@ -1,147 +1,44 @@
-<script setup lang="ts">
-import { ref } from "vue";
-import { useRouter } from "vue-router";
-import { message } from "ant-design-vue";
-import { login } from "@/api/auth";
-import { extractErrorMessage } from "@/api/client";
-import { useAuthStore } from "@/stores/auth";
-import BrandLogo from "@/components/BrandLogo.vue";
-import brand from "@/config/brand";
+#!/usr/bin/env bash
+# 后端启动脚本（Render 生产环境用）
+# 功能：1) 转换 DATABASE_URL 格式  2) 执行 Alembic 迁移  3) 启动 FastAPI
 
-const router = useRouter();
-const auth = useAuthStore();
+set -e
 
-const account = ref("");
-const password = ref("");
-const loading = ref(false);
+echo "========== 瓦力贝尔后端启动 =========="
 
-async function submit() {
-  if (!account.value.trim() || !password.value) {
-    message.warning("请输入工号和密码");
-    return;
-  }
-  loading.value = true;
-  try {
-    const data = await login({
-      mode: "teacher",
-      account: account.value.trim(),
-      credential: password.value,
-    });
-    auth.setAuth(data);
-    message.success("登录成功");
-    router.push("/teacher/students");
-  } catch (e) {
-    message.error(extractErrorMessage(e, "登录失败"));
-  } finally {
-    loading.value = false;
-  }
-}
-</script>
+# Render 提供的 DATABASE_URL 是 postgres://，需转换为 postgresql+psycopg://
+if [ -n "$DATABASE_URL" ]; then
+  export DATABASE_URL="${DATABASE_URL/postgres:\/\//postgresql+psycopg:\/\/}"
+  echo "数据库连接串: $DATABASE_URL"
+fi
 
-<template>
-  <div class="teacher-login-wrap">
-    <div class="teacher-login-card teacher-card">
-      <div class="header">
-        <div class="brand">
-          <BrandLogo which="teacher" :size="40" />
-          <div>
-            <div class="name">{{ brand.platformNameTeacher }}</div>
-            <div class="tag">教师工作台</div>
-          </div>
-        </div>
-      </div>
+# 确保 SQLite 数据目录存在
+mkdir -p ./data
 
-      <h2 class="title">老师登录</h2>
-      <p class="sub">查看学员诊断结果、推补课工单、二审映射表</p>
+# 执行 Alembic 迁移（自动升级到最新版本）
+echo "执行数据库迁移..."
+alembic upgrade head
 
-      <a-form layout="vertical" @submit.prevent="submit">
-        <a-form-item label="工号 / 账号">
-          <a-input
-            v-model:value="account"
-            placeholder="如 T001 / admin"
-            allow-clear
-          />
-        </a-form-item>
-        <a-form-item label="密码">
-          <a-input-password v-model:value="password" placeholder="登录密码" />
-        </a-form-item>
-        <a-button
-          type="primary"
-          block
-          :loading="loading"
-          html-type="submit"
-          @click="submit"
-        >
-          登录
-        </a-button>
-      </a-form>
+# 检查是否已有种子数据，没有则初始化
+echo "检查种子数据..."
+SEED_CHECK=$(python -c "
+from app.db import SessionLocal
+from app.models.question import Question
+db = SessionLocal()
+count = db.query(Question).count()
+print(count)
+db.close()
+" 2>/dev/null || echo "0")
 
-      <div class="footer">
-        M1 演示账号：T001 / T002 / admin，密码见 README
-        <span class="dot">·</span>
-        <router-link to="/student/login">切换到学员端</router-link>
-      </div>
-    </div>
-  </div>
-</template>
+if [ "$SEED_CHECK" = "0" ]; then
+  echo "首次部署，初始化演示数据（486题 + 5位学员）..."
+  python -m app.seed
+  echo "种子数据初始化完成"
+else
+  echo "已有 $SEED_CHECK 道题目，跳过种子数据初始化"
+fi
 
-<style scoped>
-.teacher-login-wrap {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(180deg, #f5f7fa 0%, #eef2f7 100%);
-  padding: 24px;
-}
-.teacher-login-card {
-  width: 100%;
-  max-width: 420px;
-  padding: 32px;
-}
-.header {
-  margin-bottom: 24px;
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.name {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--color-text);
-  line-height: 1.3;
-}
-.tag {
-  color: var(--color-text-sub);
-  font-size: 13px;
-}
-.title {
-  margin: 0 0 4px;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--color-text);
-}
-.sub {
-  color: var(--color-text-sub);
-  margin-bottom: 20px;
-  font-size: 14px;
-}
-.footer {
-  margin-top: 16px;
-  text-align: center;
-  color: var(--color-text-sub);
-  font-size: 12px;
-}
-.footer a {
-  color: var(--color-secondary);
-  text-decoration: none;
-}
-.footer a:hover {
-  text-decoration: underline;
-}
-.dot {
-  margin: 0 6px;
-}
-</style>
+# 启动 FastAPI（Koyeb/Render 都通过 PORT 环境变量指定端口）
+PORT="${PORT:-8000}"
+echo "启动服务，端口: $PORT"
+exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
