@@ -1,0 +1,11 @@
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.env
+.env.local
+wali_bell.db
+data/
+.venv
+venv/
+.git

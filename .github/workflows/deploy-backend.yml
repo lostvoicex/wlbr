@@ -1,27 +1,14 @@
-name: 部署后端到 Fly.io
+name: 部署后端（Render 自动部署）
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'backend/**'
-      - 'Dockerfile'
-      - 'fly.toml'
-      - '.github/workflows/deploy-backend.yml'
-  workflow_dispatch:
+  workflow_dispatch:  # 仅手动触发；后端由 Render GitHub 集成自动部署
 
 jobs:
-  deploy:
+  info:
     runs-on: ubuntu-latest
-
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-
-      - name: 安装 flyctl
-        uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: 部署到 Fly.io
-        run: flyctl deploy --remote-only
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: 说明
+        run: |
+          echo "后端已通过 Render GitHub 集成自动部署"
+          echo "推送代码到 main 分支后，Render 会自动拉取并部署"
+          echo "服务地址: https://wlbr.onrender.com"

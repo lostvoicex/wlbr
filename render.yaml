@@ -1,15 +1,13 @@
 services:
   - type: web
-    name: wali-bell-backend
-    runtime: python
+    name: wlbr
+    runtime: docker
     repo: https://github.com/lostvoicex/wlbr.git
     branch: main
-    buildCommand: cd backend && pip install -r requirements.txt
-    startCommand: cd backend && bash start.sh
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
     plan: free
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.10.0"
       - key: APP_ENV
         value: "prod"
       - key: JWT_SECRET_KEY
