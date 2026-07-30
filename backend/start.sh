@@ -15,9 +15,9 @@ fi
 # 确保 SQLite 数据目录存在
 mkdir -p ./data
 
-# 执行 Alembic 迁移（自动升级到最新版本）
+# 执行 Alembic 迁移（自动升级到最新版本，失败不阻塞启动）
 echo "执行数据库迁移..."
-alembic upgrade head
+alembic upgrade head || echo "WARNING: 迁移失败，将使用 create_all 兜底"
 
 # 检查是否已有种子数据，没有则初始化
 echo "检查种子数据..."
