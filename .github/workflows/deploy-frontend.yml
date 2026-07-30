@@ -40,7 +40,7 @@ jobs:
         working-directory: frontend
         run: npx vite build
         env:
-          VITE_API_BASE_URL: https://wali-bell-backend.fly.dev/api/v1
+          VITE_API_BASE_URL: https://wlbr.onrender.com/api/v1
 
       - name: 设置 Pages
         uses: actions/configure-pages@v4
