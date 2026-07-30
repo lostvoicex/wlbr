@@ -1,40 +1,11 @@
-# Render Blueprint: 瓦力贝尔编程薄弱定位平台
-# 一键部署：前端静态站点 + 后端 FastAPI + PostgreSQL
-# 使用方式：在 Render Dashboard → Blueprint → 连接本 GitHub 仓库
-
 services:
-  # ---------- 前端：Vue 3 + Vite 静态站点 ----------
-  - type: web
-    name: wali-bell-frontend
-    runtime: static
-    repo: https://github.com/lostvoicex/wlbr.git
-    branch: main
-    buildCommand: |
-      cd frontend && npm install && npx vite build
-    staticPublishPath: ./frontend/dist
-    # 单页应用路由回退
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_BASE_URL
-        fromService:
-          type: web
-          name: wali-bell-backend
-          property: host
-          template: "https://{{host}}/api/v1"
-
-  # ---------- 后端：FastAPI ----------
   - type: web
     name: wali-bell-backend
     runtime: python
     repo: https://github.com/lostvoicex/wlbr.git
     branch: main
-    buildCommand: |
-      cd backend && pip install -r requirements.txt
-    startCommand: |
-      cd backend && bash start.sh
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend && bash start.sh
     envVars:
       - key: PYTHON_VERSION
         value: "3.10.0"
@@ -44,7 +15,6 @@ services:
         fromDatabase:
           name: wali-bell-db
           property: connectionString
-          # Render 默认提供的是 postgres://，start.sh 会自动转换
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: JWT_ACCESS_TOKEN_EXPIRE_MINUTES
@@ -52,22 +22,10 @@ services:
       - key: JWT_REFRESH_TOKEN_EXPIRE_DAYS
         value: "14"
       - key: CORS_ALLOW_ORIGINS
-        value: "https://lostvoicex.github.io,https://wali-bell-frontend.onrender.com"
-
-  # ---------- OJ 安全沙箱（可选，如不需要可删除）----------
-  # 注意：Render 免费层不支持 Docker，此服务需要付费层或另行部署
-  # 如需 OJ 判题功能，建议：
-  #   1. 升级到 Render Paid Plan，启用 Docker 运行时
-  #   2. 或在本地/自有服务器单独部署 Docker 沙箱
-  # - type: web
-  #   name: wali-bell-sandbox
-  #   runtime: docker
-  #   dockerContext: .
-  #   dockerfilePath: ./backend/oj_sandbox/Dockerfile
+        value: "https://lostvoicex.github.io"
 
 databases:
   - name: wali-bell-db
     databaseName: wali_bell
     user: wali
     plan: free
-    # 免费层限制：1GB 存储，90 天后数据会被清理，请定期备份
