@@ -1,0 +1,24 @@
+# Fly.io 部署配置
+app = "wali-bell-backend"
+primary_region = "nrt"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+[env]
+  APP_ENV = "prod"
+  CORS_ALLOW_ORIGINS = "https://lostvoicex.github.io"
+  JWT_ACCESS_TOKEN_EXPIRE_MINUTES = "60"
+  JWT_REFRESH_TOKEN_EXPIRE_DAYS = "14"
+
+# SQLite 数据持久化（Fly.io 免费卷）
+[[mounts]]
+  source = "wali_bell_data"
+  destination = "/app/data"
