@@ -24,8 +24,9 @@ def list_teachers(
     _=Depends(require_role("admin")),
     keyword: Optional[str] = Query(None, description="按工号或姓名模糊搜索"),
     role: Optional[str] = Query(None, pattern=r"^(teacher|admin)$"),
+    status: Optional[str] = Query(None, pattern=r"^(active|disabled)$"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500),
 ) -> TeacherListResp:
     q = db.query(Teacher)
     if keyword:
@@ -33,6 +34,8 @@ def list_teachers(
         q = q.filter(or_(Teacher.teacher_no.like(like), Teacher.name.like(like)))
     if role:
         q = q.filter(Teacher.role == role)
+    if status:
+        q = q.filter(Teacher.status == status)
 
     total = q.count()
     items = (
