@@ -36,7 +36,7 @@ app.add_middleware(
 )
 
 
-@app.get("/api/health", tags=["meta"], summary="健康检查")
+@app.api_route("/api/health", methods=["GET", "HEAD"], tags=["meta"], summary="健康检查")
 def health() -> dict:
     return {
         "status": "ok",
