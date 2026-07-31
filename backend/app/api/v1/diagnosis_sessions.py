@@ -146,9 +146,9 @@ def _pick_by_type(
             .all()
         )
         result.extend(qs)
-    # 打乱顺序，避免选择/判断/编程固定排列
-    import random
-    random.shuffle(result)
+    # 按题型排序：单选 → 判断 → 积木排序 → 编程大题（编程题放最后）
+    _type_order = {"single": 0, "judge": 1, "coding": 2, "program": 3}
+    result.sort(key=lambda q: _type_order.get(q.q_type, 99))
     return result
 
 
