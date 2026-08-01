@@ -50,13 +50,18 @@ def import_questions(
                     raise ValueError(f"缺少必填字段: {field}")
 
             # 题型校验
-            if item["q_type"] not in ("single", "judge", "coding"):
+            if item["q_type"] not in ("single", "judge", "coding", "program"):
                 raise ValueError(f"非法题型: {item['q_type']}")
 
             # blocks_json 处理：如果是列表，转成 JSON 字符串
             blocks_json = item.get("blocks_json")
             if blocks_json is not None and not isinstance(blocks_json, str):
                 blocks_json = json.dumps(blocks_json, ensure_ascii=False)
+
+            # grading_rules 处理：如果是 dict/list，转成 JSON 字符串
+            grading_rules = item.get("grading_rules")
+            if grading_rules is not None and not isinstance(grading_rules, str):
+                grading_rules = json.dumps(grading_rules, ensure_ascii=False)
 
             question = Question(
                 syllabus_version=item["syllabus_version"],
@@ -68,6 +73,8 @@ def import_questions(
                 difficulty=int(item.get("difficulty", 1)),
                 explanation=item.get("explanation"),
                 blocks_json=blocks_json,
+                grading_rules=grading_rules,
+                program_lang=item.get("program_lang"),
             )
             db.add(question)
             success += 1
@@ -107,6 +114,8 @@ def export_questions(
             "difficulty": q.difficulty,
             "explanation": q.explanation,
             "blocks_json": json.loads(q.blocks_json) if q.blocks_json else None,
+            "grading_rules": json.loads(q.grading_rules) if q.grading_rules else None,
+            "program_lang": q.program_lang,
             "created_at": q.created_at.isoformat() if q.created_at else None,
         }
         result.append(item)
