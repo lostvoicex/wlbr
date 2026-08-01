@@ -10,30 +10,31 @@ export interface ImportResult {
 
 export function importQuestions(data: any[]) {
   return client
-    .post<ImportResult>("/admin/questions/import", { items: data })
+    .post<ImportResult>("/admin-data/questions/import", data)
     .then((r) => r.data);
 }
 
 export function exportQuestions() {
-  return client.get<any[]>("/admin/questions/export").then((r) => r.data);
+  return client.get<any[]>("/admin-data/questions/export").then((r) => r.data);
 }
 
 export function importMappings(data: any[]) {
   return client
-    .post<ImportResult>("/admin/mappings/import", { items: data })
+    .post<ImportResult>("/admin-data/mappings/import", data)
     .then((r) => r.data);
 }
 
 export function exportMappings() {
-  return client.get<any[]>("/admin/mappings/export").then((r) => r.data);
+  return client.get<any[]>("/admin-data/mappings/export").then((r) => r.data);
 }
 
 export function importStudents(data: any[]) {
   return client
-    .post<ImportResult>("/admin/students/import", { items: data })
+    .post<ImportResult>("/admin-data/students/import", data)
     .then((r) => r.data);
 }
 
 export function exportStudents() {
-  return client.get<any[]>("/admin/students/export").then((r) => r.data);
+  return client.get<any[]>("/admin-data/students/export").then((r) => r.data);
 }
+        
