@@ -2,9 +2,9 @@
 /**
  * Scratch 编程大题编辑器组件。
  *
- * 提供两种方式提交 .sb3 作品：
- *   1. 在线编辑：新窗口打开 TurboWarp 编辑器，做完后导出 .sb3 再上传
- *   2. 上传文件：直接选择本地 .sb3 文件
+ * 两种模式：
+ *   1. 在线编辑（默认）：页面内嵌入 TurboWarp iframe，做好后一键获取作品
+ *   2. 上传文件：直接选择本地 .sb3 文件（备用）
  *
  * 通过 emit("update:sb3", base64String) 向父组件传递 base64 编码的 sb3 内容。
  */
@@ -12,7 +12,6 @@ import { ref, onMounted, onUnmounted } from "vue";
 import { message } from "ant-design-vue";
 
 const props = defineProps<{
-  /** 判题规则数量（展示用） */
   checkCount?: number;
 }>();
 
@@ -20,24 +19,96 @@ const emit = defineEmits<{
   (e: "update:sb3", value: string): void;
 }>();
 
-// 默认用上传模式（更稳定可靠）
-const mode = ref<"upload" | "editor">("upload");
+const mode = ref<"editor" | "upload">("editor");
 const fileName = ref<string>("");
 const sb3Base64 = ref<string>("");
 const fileInput = ref<HTMLInputElement | null>(null);
 const dragOver = ref(false);
 const uploadError = ref<string>("");
+const iframeRef = ref<HTMLIFrameElement | null>(null);
+const iframeLoaded = ref(false);
+const exportPending = ref(false);
+const exportTimer = ref<ReturnType<typeof setTimeout> | null>(null);
 
-// 文件大小限制 5MB
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const turbowarpEmbedUrl = "https://turbowarp.org/editor?embed=true";
 
-// TurboWarp 编辑器 URL（新窗口打开，不嵌入 iframe 避免跨域问题）
-const turbowarpUrl = "https://turbowarp.org/editor";
+function onIframeLoad() {
+  iframeLoaded.value = true;
+}
 
-function openEditor() {
-  // 在新标签页打开 TurboWarp 编辑器
-  window.open(turbowarpUrl, "_blank", "noopener,noreferrer");
-  message.info("编辑器已在新窗口打开！做好后点「文件→保存到电脑」导出 .sb3，再回来上传哦～");
+function requestExport() {
+  if (!iframeLoaded.value) {
+    message.warning("编辑器还在加载，请稍等一下再试～");
+    return;
+  }
+
+  exportPending.value = true;
+  const iframe = iframeRef.value;
+  if (iframe && iframe.contentWindow) {
+    iframe.contentWindow.postMessage(
+      { type: "tw-request-export" },
+      "https://turbowarp.org",
+    );
+  }
+
+  message.loading({ content: "正在获取作品…", key: "export", duration: 0 });
+
+  exportTimer.value = setTimeout(() => {
+    if (exportPending.value) {
+      exportPending.value = false;
+      message.destroy("export");
+      message.warning(
+        "自动获取需要新版编辑器支持。请手动导出：点编辑器左上角「文件」→「保存到电脑」，然后切到「上传作品」上传～",
+        8,
+      );
+    }
+  }, 5000);
+}
+
+function handlePostMessage(event: MessageEvent) {
+  if (event.origin !== "https://turbowarp.org") return;
+  const data = event.data;
+  if (!data) return;
+
+  let sb3Data: ArrayBuffer | string | null = null;
+
+  if (
+    (data.type === "tw-exported" || data.type === "sb3-export") &&
+    data.sb3
+  ) {
+    sb3Data = data.sb3;
+  }
+
+  if (!sb3Data || !exportPending.value) return;
+
+  exportPending.value = false;
+  if (exportTimer.value) clearTimeout(exportTimer.value);
+  message.destroy("export");
+
+  let base64 = "";
+  if (sb3Data instanceof ArrayBuffer) {
+    const bytes = new Uint8Array(sb3Data);
+    const chunkSize = 0x8000;
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+    }
+    base64 = btoa(binary);
+  } else if (typeof sb3Data === "string") {
+    base64 = sb3Data.includes(",") ? sb3Data.split(",")[1] : sb3Data;
+  }
+
+  if (base64) {
+    sb3Base64.value = base64;
+    fileName.value = "在线编辑作品.sb3";
+    emit("update:sb3", base64);
+    message.success("作品获取成功！点击「提交判题」按钮～");
+  }
+}
+
+function switchToUpload() {
+  mode.value = "upload";
 }
 
 function triggerUpload() {
@@ -112,24 +183,13 @@ function clearFile() {
   if (fileInput.value) fileInput.value.value = "";
 }
 
-// 监听 TurboWarp 的 postMessage（如果支持导出回调）
-function handleMessage(event: MessageEvent) {
-  if (event.origin !== "https://turbowarp.org") return;
-  const data = event.data;
-  if (data && data.type === "sb3-export" && data.sb3) {
-    sb3Base64.value = data.sb3;
-    fileName.value = "从编辑器导出的作品.sb3";
-    emit("update:sb3", data.sb3);
-    message.success("作品已从编辑器导出！");
-  }
-}
-
 onMounted(() => {
-  window.addEventListener("message", handleMessage);
+  window.addEventListener("message", handlePostMessage);
 });
 
 onUnmounted(() => {
-  window.removeEventListener("message", handleMessage);
+  window.removeEventListener("message", handlePostMessage);
+  if (exportTimer.value) clearTimeout(exportTimer.value);
 });
 </script>
 
@@ -140,23 +200,64 @@ onUnmounted(() => {
       🔍 老师 say：这道题有 {{ props.checkCount }} 条检查规则，认真做好每一步哦～
     </div>
 
+    <!-- 作品状态指示器 -->
+    <div v-if="fileName" class="work-ready-banner">
+      <span class="ready-icon">✅</span>
+      <span class="ready-text">作品「{{ fileName }}」已准备好，点击下方「提交判题」按钮～</span>
+    </div>
+
     <!-- 模式切换 -->
     <div class="mode-tabs">
-      <button
-        :class="['tab-btn', { active: mode === 'upload' }]"
-        @click="mode = 'upload'"
-      >
-        📁 上传作品
-      </button>
       <button
         :class="['tab-btn', { active: mode === 'editor' }]"
         @click="mode = 'editor'"
       >
         🎮 在线编辑
       </button>
+      <button
+        :class="['tab-btn', { active: mode === 'upload' }]"
+        @click="mode = 'upload'"
+      >
+        📁 上传作品
+      </button>
     </div>
 
-    <!-- 上传模式（默认） -->
+    <!-- 在线编辑模式（默认） -->
+    <div v-if="mode === 'editor'" class="editor-mode">
+      <div class="iframe-wrap">
+        <div v-if="!iframeLoaded" class="iframe-loading">
+          <div class="loading-spinner">⏳</div>
+          <div class="loading-text">Scratch 编辑器加载中…</div>
+          <div class="loading-hint">第一次打开可能需要 10-20 秒，请耐心等待</div>
+        </div>
+        <iframe
+          ref="iframeRef"
+          :src="turbowarpEmbedUrl"
+          class="turbowarp-iframe"
+          allow="fullscreen; autoplay; microphone; camera"
+          allowfullscreen
+          @load="onIframeLoad"
+        />
+      </div>
+
+      <button class="export-btn" :disabled="!iframeLoaded" @click="requestExport">
+        📥 获取作品并提交
+      </button>
+
+      <div class="manual-tip">
+        <div class="tip-title">💡 如果「获取作品」按钮没反应：</div>
+        <div class="tip-steps">
+          1. 在编辑器里点左上角「文件」→「保存到电脑」<br />
+          2. 切到上方「📁 上传作品」<br />
+          3. 选择刚才保存的 .sb3 文件
+        </div>
+        <button class="switch-upload-btn" @click="switchToUpload">
+          切到上传作品 →
+        </button>
+      </div>
+    </div>
+
+    <!-- 上传模式 -->
     <div v-if="mode === 'upload'" class="upload-mode">
       <div
         :class="['drop-zone', { 'drag-over': dragOver, 'has-file': !!fileName }]"
@@ -184,34 +285,12 @@ onUnmounted(() => {
           <div class="drop-file-hint">作品已准备好，点击下方"提交判题"按钮～</div>
         </template>
       </div>
-      <!-- 错误提示 -->
       <div v-if="uploadError" class="upload-error">
         ⚠️ {{ uploadError }}
       </div>
       <button v-if="fileName" class="clear-btn" @click.stop="clearFile">
         重新选择文件
       </button>
-    </div>
-
-    <!-- 在线编辑模式 -->
-    <div v-if="mode === 'editor'" class="editor-mode">
-      <div class="editor-hint-bar">
-        <div class="hint-text">
-          🐱 点击下面的按钮打开 Scratch 编辑器（新窗口），做好后按以下步骤操作：
-        </div>
-      </div>
-      <button class="open-editor-btn" @click="openEditor">
-        🚀 打开 Scratch 编辑器
-      </button>
-      <div class="editor-steps">
-        <div class="step"><span class="step-num">1</span> 点击上方按钮，在新窗口打开编辑器</div>
-        <div class="step"><span class="step-num">2</span> 在编辑器里按题目要求搭积木</div>
-        <div class="step"><span class="step-num">3</span> 点编辑器左上角「文件」→「保存到电脑」</div>
-        <div class="step"><span class="step-num">4</span> 回到本页，切到「上传作品」上传你的 .sb3 文件</div>
-      </div>
-      <div class="editor-tip">
-        💡 小提示：如果电脑上已经有 Scratch 软件，也可以直接用本地的 Scratch 软件做好后导出 .sb3 文件再上传～
-      </div>
     </div>
   </div>
 </template>
@@ -229,6 +308,24 @@ onUnmounted(() => {
   border-radius: 12px;
   color: #664c00;
   font-size: 15px;
+}
+
+.work-ready-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 12px;
+}
+.ready-icon {
+  font-size: 18px;
+}
+.ready-text {
+  font-size: 14px;
+  color: #389e0d;
+  font-weight: 600;
 }
 
 .mode-tabs {
@@ -251,6 +348,115 @@ onUnmounted(() => {
   border-color: var(--color-primary);
   background: #fff2e8;
   color: var(--color-primary);
+}
+
+/* 在线编辑模式 */
+.editor-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.iframe-wrap {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 2px solid var(--color-border);
+  background: #1e1e1e;
+}
+.turbowarp-iframe {
+  width: 100%;
+  height: 500px;
+  border: none;
+  display: block;
+}
+.iframe-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #1e1e1e;
+  color: #888;
+  z-index: 1;
+}
+.loading-spinner {
+  font-size: 48px;
+  animation: spin 2s linear infinite;
+}
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.loading-text {
+  font-size: 16px;
+  color: #ccc;
+}
+.loading-hint {
+  font-size: 13px;
+  color: #666;
+}
+
+.export-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  border: none;
+  background: linear-gradient(90deg, #ff7a45, #faad14);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.15s ease-out, box-shadow 0.2s ease-out;
+}
+.export-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(255, 122, 69, 0.3);
+}
+.export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.manual-tip {
+  padding: 12px 14px;
+  background: #fafafa;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tip-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-sub);
+}
+.tip-steps {
+  font-size: 13px;
+  color: var(--color-text-sub);
+  line-height: 1.8;
+  padding-left: 4px;
+}
+.switch-upload-btn {
+  align-self: flex-start;
+  background: none;
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  margin-top: 4px;
+}
+.switch-upload-btn:hover {
+  background: #fff2e8;
 }
 
 /* 上传模式 */
@@ -328,75 +534,5 @@ onUnmounted(() => {
   cursor: pointer;
   font-size: 14px;
   font-family: inherit;
-}
-
-/* 在线编辑模式 */
-.editor-mode {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.editor-hint-bar {
-  background: #f0f5ff;
-  padding: 12px 14px;
-  border-radius: var(--radius-md);
-}
-.hint-text {
-  font-size: 14px;
-  color: #1d39c4;
-  line-height: 1.6;
-}
-.open-editor-btn {
-  width: 100%;
-  padding: 16px;
-  border-radius: var(--radius-lg);
-  border: none;
-  background: linear-gradient(90deg, #ff7a45, #faad14);
-  color: #fff;
-  font-size: 18px;
-  font-weight: 700;
-  cursor: pointer;
-  font-family: inherit;
-  transition: transform 0.15s ease-out, box-shadow 0.2s ease-out;
-}
-.open-editor-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(255, 122, 69, 0.3);
-}
-.editor-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px;
-  background: #fafafa;
-  border-radius: var(--radius-md);
-}
-.step {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  color: var(--color-text-sub);
-}
-.step-num {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--color-primary);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-.editor-tip {
-  padding: 10px 14px;
-  background: #fff9db;
-  border-radius: 8px;
-  color: #664c00;
-  font-size: 13px;
-  line-height: 1.5;
 }
 </style>
