@@ -74,7 +74,7 @@ SCRATCH_L1_QUESTIONS = [
             {"check": "opcode_exists", "opcodes": ["event_whenflagclicked"], "desc": "必须有点击绿旗积木"},
             {"check": "opcode_exists", "opcodes": ["looks_sayforsecs"], "desc": "必须有说话积木"},
             {"check": "opcode_exists", "opcodes": ["looks_nextcostume"], "desc": "必须有换造型积木"},
-            {"check": "opcode_exists", "opcodes": ["sound_play"], "desc": "必须有播放声音积木"},
+            {"check": "opcode_exists", "opcodes": ["sound_play", "sound_playuntildone"], "desc": "必须有播放声音积木"},
         ]),
     },
 

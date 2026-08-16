@@ -231,8 +231,8 @@ class SandboxRunner:
             "--memory", DOCKER_MEMORY_LIMIT,
             "--cpus", DOCKER_CPU_LIMIT,
             "--user", "nobody",
-            "-v", f"{work_dir_abs}:{container_work}:ro",  # 工作目录只读挂载
-            "--tmpfs", "/sandbox/tmp:rw,noexec,nosuid,size=50m",  # 可写临时区
+            "-v", f"{work_dir_abs}:{container_work}:rw",  # 工作目录可写（编译需要）
+            "--tmpfs", "/sandbox/tmp:rw,nosuid,size=50m",  # 可写临时区（允许执行）
             "-w", container_work,
             DOCKER_IMAGE,
             " ".join(cmd),  # 通过 bash -c 执行
@@ -296,12 +296,15 @@ class SandboxRunner:
         timeout: int = 5,
     ) -> RunResult:
         """执行 Python 代码文件。"""
-        python_cmd = _find_python()
-        if not python_cmd:
-            return RunResult(
-                stdout="", stderr="未找到 Python 运行环境", returncode=-1,
-                timed_out=False, mode="subprocess",
-            )
+        if self.use_docker:
+            python_cmd = "python3"
+        else:
+            python_cmd = _find_python()
+            if not python_cmd:
+                return RunResult(
+                    stdout="", stderr="未找到 Python 运行环境", returncode=-1,
+                    timed_out=False, mode="subprocess",
+                )
         work_dir = os.path.dirname(os.path.abspath(code_file))
         return self.run(
             [python_cmd, os.path.basename(code_file)],
@@ -323,12 +326,15 @@ class SandboxRunner:
 
         注意：Docker 模式下，输出文件路径必须在挂载的工作目录内。
         """
-        compiler = _find_compiler("cpp")
-        if not compiler:
-            return RunResult(
-                stdout="", stderr="未找到 C++ 编译器（g++）", returncode=-1,
-                timed_out=False, mode="subprocess",
-            )
+        if self.use_docker:
+            compiler = "g++"
+        else:
+            compiler = _find_compiler("cpp")
+            if not compiler:
+                return RunResult(
+                    stdout="", stderr="未找到 C++ 编译器（g++）", returncode=-1,
+                    timed_out=False, mode="subprocess",
+                )
         work_dir = os.path.dirname(os.path.abspath(source_file))
         output_name = os.path.basename(output_file)
         return self.run(

@@ -69,7 +69,15 @@ def _is_correct(question: Question, student_answer: str) -> bool:
     - single：忽略大小写与空格
     - judge：接受 true/false/对/错/✅/❌ 等常见写法
     - coding（M1 简化为积木块排序）：与标准答案字符串完全一致
+    - program：由 OJ 判题引擎写入 LearningRecord，此处不应调用
     """
+    if question.q_type == "program":
+        import re
+        m = re.search(r"score=(\d+)", student_answer)
+        if m:
+            return int(m.group(1)) >= 60
+        return False
+
     ans = _normalize(question.answer)
     stu = _normalize(student_answer)
 

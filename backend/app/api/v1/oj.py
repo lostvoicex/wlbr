@@ -36,7 +36,7 @@ from app.schemas.oj import (
     OjSubmitRequest,
     OjSubmitResponse,
 )
-from app.services.code_runner import grade_code
+from app.services.code_runner import grade_code, grade_code_static
 from app.services.sb3_grader import grade_sb3
 
 router = APIRouter(prefix="/oj", tags=["oj"])
@@ -229,20 +229,22 @@ def submit(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="这次闯关已经结束啦"
             )
 
-    # 同步判题（生产环境无 Docker 沙箱时拒绝执行）
+    # 判题：优先使用沙箱执行，沙箱不可用时降级为静态分析
+    use_static = False
     if payload.language in ("python", "cpp"):
         from app.services.sandbox_runner import SandboxUnavailableError
         try:
             from app.services.sandbox_runner import get_sandbox_runner
             get_sandbox_runner()
         except SandboxUnavailableError:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="编程题判题服务暂未就绪，请稍后再试或联系老师。",
-            )
+            use_static = True
 
     start_ts = time.time()
-    result = _dispatch_grading(question, payload.code, payload.language)
+    if use_static:
+        rules_json = question.grading_rules or ""
+        result = grade_code_static(payload.code, rules_json, payload.language)
+    else:
+        result = _dispatch_grading(question, payload.code, payload.language)
     judge_duration_ms = int((time.time() - start_ts) * 1000)
 
     verdict = result.get("verdict", "wrong_answer")
