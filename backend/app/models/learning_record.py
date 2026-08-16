@@ -25,7 +25,7 @@ class LearningRecord(Base):
     )
     student_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_correct: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    # 会话类型：diagnose / retest_t1 / retest_t2（学员端 UI 会翻译成"闯关/巩固小考"）
+    # 会话类型：diagnosis / retest_t1 / retest_t2（与 DiagnosisSession.session_type 对齐）
     session_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     session_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     # 反作弊：作答耗时（秒），前端上报

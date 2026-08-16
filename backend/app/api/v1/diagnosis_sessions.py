@@ -369,11 +369,13 @@ def start(
         # 如果按题型抽题数量不足（题库不全），退化为随机抽题补齐
         if len(questions) < payload.count:
             existing_ids = {q.id for q in questions}
+            extra_q = db.query(Question).filter(
+                Question.syllabus_version == payload.syllabus_target
+            )
+            if existing_ids:
+                extra_q = extra_q.filter(~Question.id.in_(existing_ids))
             extra = (
-                db.query(Question)
-                .filter(Question.syllabus_version == payload.syllabus_target)
-                .filter(~Question.id.in_(existing_ids) if existing_ids else True)
-                .order_by(sa_func.random())
+                extra_q.order_by(sa_func.random())
                 .limit(payload.count - len(questions))
                 .all()
             )
