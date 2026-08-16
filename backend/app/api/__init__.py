@@ -6,6 +6,7 @@ from app.api.v1 import (
     auth,
     captcha,
     copy_texts,
+    dashboard,
     diagnosis_sessions,
     kp_labels,
     kp_mappings,
@@ -31,5 +32,6 @@ api_v1_router.include_router(kp_mappings.router)
 api_v1_router.include_router(admin_data.router)
 api_v1_router.include_router(oj.router)
 api_v1_router.include_router(captcha.router)
+api_v1_router.include_router(dashboard.router)
 
 __all__ = ["api_v1_router"]

@@ -44,6 +44,7 @@ function logout() {
         :selected-keys="[activeKey]"
         @click="onMenuClick"
       >
+        <a-menu-item key="TeacherDashboard">仪表盘</a-menu-item>
         <a-menu-item key="TeacherStudents">学员列表</a-menu-item>
         <a-menu-item key="TeacherWorkOrders">补课工单</a-menu-item>
         <a-menu-item key="TeacherMappings">映射二审</a-menu-item>

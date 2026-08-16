@@ -55,7 +55,12 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: "",
-        redirect: "/teacher/students",
+        redirect: "/teacher/dashboard",
+      },
+      {
+        path: "dashboard",
+        name: "TeacherDashboard",
+        component: () => import("@/views/teacher/TeacherDashboard.vue"),
       },
       {
         path: "students",
