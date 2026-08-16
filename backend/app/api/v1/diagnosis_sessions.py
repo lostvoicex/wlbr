@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
-from app.core.deps import CurrentUser, get_current_user
+from app.core.deps import CurrentUser, get_current_user, require_role
 from app.db import get_db
 from app.models import (
     DiagnosisSession,
@@ -39,6 +39,7 @@ from app.schemas.diagnosis import (
     StartDiagnosisResponse,
     TabSwitchRequest,
 )
+from app.schemas.student import SessionHistoryOut, SessionHistoryResp
 from app.services.mastery import aggregate_by_kp
 from app.services.retest_weighting import calculate_weighted_mastery
 from app.services.adaptive_selection import adaptive_select_questions
@@ -816,3 +817,48 @@ def share_to_teacher(
         "work_order_id": work_order.id,
         "message": "报告已分享给老师，老师会尽快查看",
     }
+
+
+@router.get(
+    "/my-history",
+    response_model=SessionHistoryResp,
+    summary="我的诊断历史（学员端查看自己的所有诊断记录）",
+)
+def get_my_history(
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_role("student")),
+) -> SessionHistoryResp:
+    student_id = _require_student(user)
+
+    sessions = (
+        db.query(DiagnosisSession)
+        .filter(DiagnosisSession.student_id == student_id)
+        .order_by(DiagnosisSession.started_at.desc())
+        .all()
+    )
+
+    items: list[SessionHistoryOut] = []
+    for s in sessions:
+        snapshots = (
+            db.query(KpMasterySnapshot)
+            .filter(KpMasterySnapshot.session_id == s.id)
+            .all()
+        )
+        items.append(
+            SessionHistoryOut(
+                id=s.id,
+                session_type=s.session_type,
+                syllabus_target=s.syllabus_target,
+                total_count=s.total_count,
+                correct_count=s.correct_count,
+                status=s.status,
+                started_at=s.started_at,
+                finished_at=s.finished_at,
+                suspicious_flag=s.suspicious_flag,
+                suspicious_reason=s.suspicious_reason,
+                kp_snapshots=snapshots,
+            )
+        )
+
+    return SessionHistoryResp(total=len(items), items=items)
+

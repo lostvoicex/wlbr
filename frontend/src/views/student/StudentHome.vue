@@ -152,7 +152,10 @@ function logout() {
         <BrandLogo which="student" :size="32" />
         <span>{{ brand.platformNameStudent }}</span>
       </div>
-      <a-button type="link" @click="logout">退出</a-button>
+      <div class="header-actions">
+        <a-button type="link" @click="router.push('/student/history')">我的记录</a-button>
+        <a-button type="link" @click="logout">退出</a-button>
+      </div>
     </header>
 
     <main class="page">

@@ -41,6 +41,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import("@/views/student/StudentResult.vue"),
     meta: { side: "kid", requiresRole: "student" },
   },
+  {
+    path: "/student/history",
+    name: "StudentHistory",
+    component: () => import("@/views/student/StudentHistory.vue"),
+    meta: { side: "kid", requiresRole: "student" },
+  },
   // ---------- 老师端 ----------
   {
     path: "/teacher/login",

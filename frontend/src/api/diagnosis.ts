@@ -150,3 +150,31 @@ export function shareReportToTeacher(sessionId: number) {
     )
     .then((r) => r.data);
 }
+
+/** 学员查看自己的诊断历史 */
+export function getMyHistory() {
+  return client
+    .get<{
+      total: number;
+      items: Array<{
+        id: number;
+        session_type: string;
+        syllabus_target: string;
+        total_count: number;
+        correct_count: number;
+        status: string;
+        started_at: string;
+        finished_at: string | null;
+        suspicious_flag: boolean;
+        suspicious_reason: string | null;
+        kp_snapshots: Array<{
+          knowledge_point: string;
+          correct_count: number;
+          total_count: number;
+          correct_rate: number;
+          mastery_level: string;
+        }>;
+      }>;
+    }>("/diagnosis-sessions/my-history")
+    .then((r) => r.data);
+}
