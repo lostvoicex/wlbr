@@ -68,6 +68,13 @@ export default defineConfig(({ mode }) => {
               ) {
                 return "vendor-antdv";
               }
+              if (
+                normalizedId.includes("@codemirror/") ||
+                normalizedId.includes("/codemirror/") ||
+                normalizedId.includes("vue-codemirror")
+              ) {
+                return "vendor-codemirror";
+              }
               // 其他第三方库统一放一个 chunk
               return "vendor";
             }
