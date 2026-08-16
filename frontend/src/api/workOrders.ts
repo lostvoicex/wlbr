@@ -78,9 +78,7 @@ export function updateWorkOrder(id: number, data: WorkOrderUpdate) {
 }
 
 export function cancelWorkOrder(id: number) {
-  return client
-    .post<WorkOrderOut>(`/work-orders/${id}/cancel`)
-    .then((r) => r.data);
+  return client.delete<void>(`/work-orders/${id}`).then((r) => r.data);
 }
 
 export function completeWorkOrder(id: number) {

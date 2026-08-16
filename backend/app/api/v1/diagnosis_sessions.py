@@ -238,85 +238,51 @@ def _pick_questions_for_retest(
     session_type: str,
     count: int,
 ) -> List[Question]:
-    """复测抽题：只抽该学员薄弱 KP 相关的题目，同时保持 15:10:2 题型比例。
+    """复测抽题：使用自适应加权算法按 KP 掌握度分配题量，同时保持 15:10:2 题型比例。
 
-    从该学员该 syllabus 的加权结果中找出 need_review / need_repair 的 KP，
-    按题型配比分配名额，再从薄弱 KP 池中均衡抽取。
+    1. 调用 adaptive_select_questions 获取按 KP 权重分配的题目池
+    2. 从池中按题型比例（15:10:2）选取
+    3. 不足的题型从全库随机补充
     """
-    weighted = calculate_weighted_mastery(db, student_id, syllabus_target)
-    weak_kps = [r.knowledge_point for r in weighted if r.mastery_level in ("need_review", "need_repair")]
+    # 获取自适应加权的题目池（按 KP 掌握度加权分配）
+    adaptive_pool = adaptive_select_questions(db, student_id, syllabus_target, count)
 
-    # 计算各题型需要的数量
+    if not adaptive_pool:
+        return _pick_by_type(db, syllabus_target, _calc_type_counts(count))
+
+    # 按题型分组
+    by_type: Dict[str, List[Question]] = {}
+    for q in adaptive_pool:
+        by_type.setdefault(q.q_type, []).append(q)
+
     type_counts = _calc_type_counts(count)
-
-    if not weak_kps:
-        # 没有薄弱 KP，按题型比例随机抽
-        return _pick_by_type(db, syllabus_target, type_counts)
-
-    # 构建薄弱 KP 的题库池，分题型
-    kp_pool: Dict[str, List[Question]] = {}
-    for kp in weak_kps:
-        qs = (
-            db.query(Question)
-            .filter(Question.syllabus_version == syllabus_target)
-            .filter(Question.knowledge_point == kp)
-            .order_by(sa_func.random())
-            .all()
-        )
-        if qs:
-            kp_pool[kp] = qs
-
     picked: List[Question] = []
+    picked_ids: set = set()
 
-    # 按题型分别抽取，每个题型内按 KP 均衡
     for q_type, need in type_counts.items():
         if need <= 0:
             continue
-        # 筛选该题型的题目
-        type_pool: Dict[str, List[Question]] = {}
-        for kp, qs in kp_pool.items():
-            typed = [q for q in qs if q.q_type == q_type]
-            if typed:
-                type_pool[kp] = list(typed)
+        pool = by_type.get(q_type, [])
+        available = [q for q in pool if q.id not in picked_ids]
+        take = min(need, len(available))
+        for q in available[:take]:
+            picked.append(q)
+            picked_ids.add(q.id)
 
-        remaining = need
-        # 每个 KP 先取 1 道
-        for kp, qs in type_pool.items():
-            if remaining <= 0:
-                break
-            picked.append(qs[0])
-            type_pool[kp] = qs[1:]
-            remaining -= 1
+        # 不够则从全库同题型补
+        shortage = need - take
+        if shortage > 0:
+            extra_q = db.query(Question).filter(
+                Question.syllabus_version == syllabus_target,
+                Question.q_type == q_type,
+            )
+            if picked_ids:
+                extra_q = extra_q.filter(~Question.id.in_(picked_ids))
+            extra = extra_q.order_by(sa_func.random()).limit(shortage).all()
+            for q in extra:
+                picked.append(q)
+                picked_ids.add(q.id)
 
-        # 剩余名额循环补充
-        while remaining > 0:
-            added = False
-            for kp, qs in list(type_pool.items()):
-                if remaining <= 0:
-                    break
-                if qs:
-                    picked.append(qs[0])
-                    type_pool[kp] = qs[1:]
-                    remaining -= 1
-                    added = True
-            if not added:
-                # 薄弱 KP 该题型不够，从全库补
-                extra = (
-                    db.query(Question)
-                    .filter(
-                        Question.syllabus_version == syllabus_target,
-                        Question.q_type == q_type,
-                    )
-                    .order_by(sa_func.random())
-                    .limit(remaining)
-                    .all()
-                )
-                picked.extend(extra)
-                remaining -= len(extra)
-                if not extra:
-                    break
-
-    # 打乱顺序
     import random
     random.shuffle(picked)
     return picked

@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import { onMounted, reactive, ref, computed } from "vue";
+import { useRouter } from "vue-router";
 import { message } from "ant-design-vue";
 import type { TablePaginationConfig } from "ant-design-vue";
 import { listStudents, createStudent, type StudentOut, type StudentCreate } from "@/api/students";
@@ -7,6 +8,8 @@ import { extractErrorMessage } from "@/api/client";
 import { useKpLabelsStore } from "@/stores/kpLabels";
 import { useCopyTextsStore } from "@/stores/copyTexts";
 import { fetchTeacherAlerts, type TeacherAlertItem } from "@/api/reminders";
+
+const router = useRouter();
 
 const loading = ref(false);
 const dataSource = ref<StudentOut[]>([]);
@@ -158,6 +161,14 @@ function onTableChange(p: TablePaginationConfig) {
   fetchData();
 }
 
+function viewDetail(record: StudentOut) {
+  router.push(`/teacher/students/${record.id}`);
+}
+
+function pushWorkOrder(record: StudentOut) {
+  router.push(`/teacher/students/${record.id}?action=workorder`);
+}
+
 function openModal() {
   modalVisible.value = true;
   formState.name = "";
@@ -269,13 +280,12 @@ onMounted(async () => {
         @change="onTableChange"
         size="middle"
       >
-        <template #bodyCell="{ column, record: _record }">
+        <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'action'">
             <a-space>
-              <a-button size="small" type="link" :disabled="true">查看诊断</a-button>
-              <a-button size="small" type="link" :disabled="true">推补课工单</a-button>
+              <a-button size="small" type="link" @click="viewDetail(record)">查看诊断</a-button>
+              <a-button size="small" type="link" @click="pushWorkOrder(record)">推补课工单</a-button>
             </a-space>
-            <div class="hint">（后续批次接入）</div>
           </template>
         </template>
       </a-table>
@@ -347,11 +357,6 @@ onMounted(async () => {
 }
 .table-wrap {
   padding: 12px 20px 20px;
-}
-.hint {
-  color: var(--color-text-sub);
-  font-size: 12px;
-  margin-top: 2px;
 }
 
 /* ---------- 催办栏 ---------- */

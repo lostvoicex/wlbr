@@ -1,4 +1,4 @@
-import axios, { AxiosError } from "axios";
+import axios, { AxiosError, type AxiosRequestConfig } from "axios";
 import { useAuthStore } from "@/stores/auth";
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
@@ -23,14 +23,58 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
+// Token 自动刷新：401 时尝试用 refresh_token 换取新 access_token
+let _refreshing: Promise<boolean> | null = null;
+
+async function tryRefreshToken(): Promise<boolean> {
+  const auth = useAuthStore();
+  if (!auth.refreshToken) return false;
+
+  try {
+    const resp = await axios.post(
+      `${baseURL}/auth/refresh`,
+      { refresh_token: auth.refreshToken },
+      { timeout: REQUEST_TIMEOUT },
+    );
+    const data = resp.data;
+    auth.setAuth({
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      role: data.role,
+      subject: data.subject,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // 生产环境：网络超时自动重试一次（应对 Render 冷启动）
 client.interceptors.response.use(
   (resp) => resp,
   async (error: AxiosError) => {
-    // 401 清理登录态
+    // 401 尝试刷新 token
     if (error && error.response && error.response.status === 401) {
-      const auth = useAuthStore();
-      auth.clear();
+      const cfg = error.config as AxiosRequestConfig & { _isRefresh?: boolean };
+      // 避免刷新请求自身 401 时无限循环
+      if (!cfg._isRefresh) {
+        if (!_refreshing) {
+          _refreshing = tryRefreshToken().finally(() => {
+            _refreshing = null;
+          });
+        }
+        const refreshed = await _refreshing;
+        if (refreshed) {
+          // 刷新成功，重试原始请求
+          const auth = useAuthStore();
+          cfg.headers = cfg.headers || {};
+          (cfg.headers as Record<string, string>).Authorization = `Bearer ${auth.accessToken}`;
+          return client.request(cfg);
+        }
+        // 刷新失败，清除登录态
+        const auth = useAuthStore();
+        auth.clear();
+      }
       return Promise.reject(error);
     }
 
