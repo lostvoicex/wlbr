@@ -86,11 +86,17 @@ class CaptchaResponse(BaseModel):
 
 
 @router.get("/image", response_class=StreamingResponse, summary="获取图形验证码图片")
-def get_captcha_image() -> StreamingResponse:
+def get_captcha_image(captcha_id: str = "") -> StreamingResponse:
     _gc()
+    if captcha_id:
+        entry = _store.get(captcha_id)
+        if entry:
+            text = entry[0]
+            image_bytes = _render_image(text)
+            return StreamingResponse(io.BytesIO(image_bytes), media_type="image/png")
     text = _generate_text()
-    captcha_id = str(uuid.uuid4())
-    _store[captcha_id] = (text.upper(), time.time() + _CAPTCHA_TTL)
+    new_id = str(uuid.uuid4())
+    _store[new_id] = (text.upper(), time.time() + _CAPTCHA_TTL)
     image_bytes = _render_image(text)
     return StreamingResponse(io.BytesIO(image_bytes), media_type="image/png")
 

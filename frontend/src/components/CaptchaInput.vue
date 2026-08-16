@@ -17,7 +17,7 @@ async function refreshCaptcha() {
   try {
     const resp = await createCaptcha();
     captchaId.value = resp.captcha_id;
-    imgUrl.value = getCaptchaImage();
+    imgUrl.value = getCaptchaImage(resp.captcha_id);
     captchaCode.value = "";
     emit("update:captchaId", captchaId.value);
     emit("update:captchaCode", captchaCode.value);

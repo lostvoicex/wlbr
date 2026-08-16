@@ -26,9 +26,10 @@ export function refresh(refresh_token: string) {
     .then((r) => r.data);
 }
 
-export function getCaptchaImage(): string {
+export function getCaptchaImage(captchaId?: string): string {
   const baseURL = (client.defaults.baseURL || "/api/v1").replace(/\/$/, "");
-  return `${baseURL}/captcha/image?t=${Date.now()}`;
+  const idParam = captchaId ? `&captcha_id=${captchaId}` : "";
+  return `${baseURL}/captcha/image?t=${Date.now()}${idParam}`;
 }
 
 export async function createCaptcha(): Promise<{ captcha_id: string; expires_in: number }> {
