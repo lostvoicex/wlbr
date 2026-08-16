@@ -3,7 +3,7 @@
 > 面向后续 Agent / 开发者的**项目全貌与规范说明**，帮助快速定位代码、避免踩坑。
 
 ## 1. 项目定位
-瓦力贝尔编程薄弱定位平台 · M1 骨架。前后端分离 monorepo：`frontend/`（Vue 3 + AntDV）、`backend/`（FastAPI + SQLAlchemy 2 + Alembic + PostgreSQL 15），JWT 认证，RESTful API 前缀 `/api/v1`。
+瓦力贝尔编程薄弱定位平台。前后端分离 monorepo：`frontend/`（Vue 3 + AntDV + CodeMirror 6）、`backend/`（FastAPI + SQLAlchemy 2 + Alembic + PostgreSQL 15），JWT 认证，RESTful API 前缀 `/api/v1`。
 
 ## 2. 快速运行
 - 沙箱：`.coze` 已配好，`coze dev` 自动装依赖并起前后端。
@@ -42,7 +42,10 @@
 | `app/api/v1/kp_mappings.py` | KP→课件映射数据 CRUD + 审核流程 |
 | `app/api/v1/admin_data.py` | 数据更新通道（题目/映射的导入导出） |
 | `app/api/v1/teachers.py` | 老师列表 / 详情 |
-| `app/api/v1/work_orders.py` | 工单系统（映射纠错 / 资料更新申请） |
+| `app/api/v1/work_orders.py` | 工单系统（映射纠错 / 资料更新申请，含 assignee_id 分配） |
+| `app/api/v1/captcha.py` | 图形验证码（Pillow 生成图片 + Redis/内存缓存校验） |
+| `app/api/v1/reminders.py` | 复测提醒功能 |
+| `app/api/v1/copy_texts.py` | 学员端文案常量（童趣化提示语） |
 | `app/seed.py` | 演示数据：5 位学员 + 486 题（Scratch L1-L4 108 + C++ L1-L8 216 + Python L1-L6 162）+ 17 条 KP 映射 |
 | `app/data/` | 题库数据包：scratch_questions_data.py / cpp_questions_data.py / python_questions_data.py |
 | `app/reseed_questions.py` | 开发用：只清空并重建题库（不改学员/记录） |
@@ -54,6 +57,9 @@
 | `alembic/versions/20250105_0005_question_blocks.py` | 第五批：question 新增 blocks_json（coding 题积木池） |
 | `alembic/versions/20250106_0006_m2_tables.py` | 第六批：M2 表（teachers / work_orders / kp_mappings / mapping_reviews） |
 | `alembic/versions/20250107_0007_oj_and_anticheat.py` | 第七批：OJ 表 + 反作弊字段（oj_submissions / tab_switch_events / 各表反作弊字段） |
+| `alembic/versions/20250108_0008_work_order_assignee.py` | 第八批：work_orders 新增 assignee_id 字段（工单分配教师） |
+| `app/constants/kp_labels.py` | 童趣化 KP 标签映射（Scratch 21 + Python 32 + C++ 40 = 93 条） |
+| `app/core/security.py` 中 `validate_jwt_secret()` | 生产环境 JWT 密钥校验（拒绝默认值 `change-me-in-prod`） |
 
 ### 前端 (`frontend/`)
 | 位置 | 作用 |
@@ -74,8 +80,10 @@
 | `src/views/teacher/TeacherMappings.vue` | KP 映射管理（审核/编辑/章节关联） |
 | `src/views/teacher/TeacherDataAdmin.vue` | 数据管理（题目/映射的导入导出/批量更新） |
 | `src/views/teacher/TeacherWorkOrders.vue` | 工单处理（映射纠错 / 资料更新审核） |
-| `src/components/ScratchEditor.vue` | Scratch 编程大题编辑器（TurboWarp iframe + sb3 上传） |
-| `src/components/CodeEditor.vue` | Python/C++ 代码编辑器（语法高亮 + 行号 + 括号补全） |
+| `src/components/ScratchEditor.vue` | Scratch 编程大题编辑器（TurboWarp iframe 嵌入 + postMessage 一键导出 + sb3 上传备用） |
+| `src/components/CodeEditor.vue` | Python/C++ 代码编辑器（CodeMirror 6：语法高亮 + 括号匹配 + 代码折叠 + VS Code 暗色主题） |
+| `src/components/CaptchaInput.vue` | 图形验证码输入组件（与后端 captcha API 对接） |
+| `src/components/BrandLogo.vue` | 瓦力贝尔品牌 Logo 组件 |
 | `src/styles/global.css` | 设计 Tokens（对照 `DESIGN.md`），学员端 `.kid-app` / 老师端 `.teacher-app` |
 
 ## 5. 开发约束
@@ -104,21 +112,25 @@
 - 运行 seed 数据：`cd backend && python -m app.seed`
 - OJ 引擎单元测试：`cd backend && python -c "from app.services.code_runner import grade_code; from app.services.sb3_grader import grade_sb3; print('OJ OK')"`
 
-## 8. 当前完成状态（截至 2026-07-29）
+## 8. 当前完成状态（截至 2026-08-16）
 
 ### 已交付
-- **11 张表** 完整 ORM + Alembic 迁移链（0001→0007）
+- **11 张表** 完整 ORM + Alembic 迁移链（0001→0008）
 - **486 道题库** 按电子学会 2026 修订版考纲（Scratch L1-L4 / C++ L1-L8 / Python L1-L6）
 - **每级 27 题**：15 单选 + 10 判断 + 2 编程大题（program）
 - **OJ 判题引擎**：Scratch sb3 静态分析 + Python/C++ 运行时执行
-- **OJ 安全沙箱**：Docker 容器隔离（自动检测，无 Docker 时回退子进程）+ 资源限制 + 网络隔离
+- **OJ 安全沙箱**：Docker 容器隔离（自动检测，生产环境无 Docker 时返回 503 拒绝执行）+ 资源限制 + 网络隔离
 - **反作弊系统**：切屏检测（≥3 次警告 / ≥5 次标记可疑）+ 答题时长异常检测（<3s 或 >5min）
 - **复测闭环**：T1（3 天后）+ T2（7 天后），加权算法 T1×0.3 + T2×0.7
 - **智能抽题**：按 KP 掌握度加权（need_repair×2.5 / need_review×1.5 / mastered×0.5）
 - **数据更新通道**：admin_data API + 老师端数据管理页面
 - **KP 映射审核**：二级审核流程（review_level=2 才生效）
-- **工单系统**：映射纠错 / 资料更新申请
-- **前端性能优化**：chunk 拆分（vendor-vue / vendor-antdv / vendor），index chunk 从 1.5MB 降至 7.75KB
+- **工单系统**：映射纠错 / 资料更新申请，含 assignee_id 分配功能
+- **前端性能优化**：chunk 拆分（vendor-vue / vendor-antdv / vendor / vendor-codemirror），index chunk 从 1.5MB 降至 7.75KB
+- **童趣化 KP 标签**：93 条标签（Scratch 21 + Python 32 + C++ 40），学员端自动显示友好名称
+- **图形验证码**：后端 Pillow 生成 + 前端学员/老师登录页集成
+- **安全加固（P0）**：CORS 移除通配符回退 / JWT 密钥生产校验 / OJ 沙箱生产 503 / Render 持久磁盘挂载
+- **编程编辑器升级**：CodeMirror 6（语法高亮 + 括号匹配 + 代码折叠）+ TurboWarp iframe 嵌入（postMessage 一键导出）
 
 ### 仍需关注（生产前）
 - **Docker 沙箱镜像构建**：生产服务器需执行 `docker build -t wali-bell-oj-sandbox:latest -f backend/oj_sandbox/Dockerfile .`

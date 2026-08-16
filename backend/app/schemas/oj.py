@@ -10,7 +10,7 @@ class OjSubmitRequest(BaseModel):
     question_id: int = Field(..., description="题目 ID")
     session_id: Optional[int] = Field(None, description="诊断会话 ID（诊断中提交时传入）")
     language: str = Field(..., pattern=r"^(scratch|python|cpp)$", description="提交语言")
-    code: str = Field(..., description="提交内容：scratch→sb3的base64 / python|cpp→源代码")
+    code: str = Field(..., max_length=7_000_000, description="提交内容：scratch→sb3的base64 / python|cpp→源代码")
 
 
 class OjTestCaseResult(BaseModel):

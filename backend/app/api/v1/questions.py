@@ -1,13 +1,13 @@
 """题库路由：/api/v1/questions/*"""
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user, require_role
+from app.core.deps import CurrentUser, get_current_user, require_role
 from app.db import get_db
 from app.models import Question
-from app.schemas.question import QuestionListResp, QuestionOut
+from app.schemas.question import QuestionListResp, QuestionOut, QuestionOutStudent
 
 router = APIRouter(prefix="/questions", tags=["questions"])
 
@@ -21,7 +21,7 @@ def list_questions(
     db: Session = Depends(get_db),
     _=Depends(require_role("teacher", "admin")),
     syllabus_version: Optional[str] = Query(None),
-    grade_level: Optional[int] = Query(None, ge=1, le=6),
+    grade_level: Optional[int] = Query(None, ge=1, le=12),
     q_type: Optional[str] = Query(None, pattern="^(single|judge|coding|program)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -51,17 +51,16 @@ def list_questions(
 
 @router.get(
     "/random",
-    response_model=list[QuestionOut],
-    summary="学员诊断抽题（M1 骨架：按大纲+级别随机取 10 道，混排三型）",
+    response_model=list[QuestionOutStudent],
+    summary="学员诊断抽题（按大纲+级别随机取 N 道，学员端隐藏答案）",
 )
 def random_pick(
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    user: CurrentUser = Depends(get_current_user),
     syllabus_version: str = Query(..., description="如 scratch-l1 / scratch-l2"),
-    grade_level: int = Query(..., ge=1, le=6),
+    grade_level: int = Query(..., ge=1, le=12),
     count: int = Query(10, ge=1, le=30),
-) -> list[QuestionOut]:
-    # SQLite 与 PostgreSQL 都支持 RANDOM() 函数
+) -> list[QuestionOutStudent]:
     from sqlalchemy import func as sa_func
 
     rows = (
@@ -74,20 +73,23 @@ def random_pick(
         .limit(count)
         .all()
     )
-    return [QuestionOut.model_validate(x) for x in rows]
+
+    return [QuestionOutStudent.model_validate(x) for x in rows]
 
 
 @router.get(
     "/{question_id}",
-    response_model=QuestionOut,
-    summary="题目详情",
+    response_model=Union[QuestionOut, QuestionOutStudent],
+    summary="题目详情（学员端隐藏答案，老师端含答案）",
 )
 def get_question(
     question_id: int,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
-) -> QuestionOut:
+    user: CurrentUser = Depends(get_current_user),
+) -> Union[QuestionOut, QuestionOutStudent]:
     q = db.query(Question).filter(Question.id == question_id).first()
     if not q:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="题目不存在")
+    if user.role == "student":
+        return QuestionOutStudent.model_validate(q)
     return QuestionOut.model_validate(q)

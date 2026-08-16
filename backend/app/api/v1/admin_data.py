@@ -77,10 +77,12 @@ def import_questions(
                 program_lang=item.get("program_lang"),
             )
             db.add(question)
+            db.flush()
             success += 1
         except Exception as e:  # noqa: BLE001
             failed += 1
             errors.append(f"第 {idx + 1} 条: {str(e)}")
+            db.rollback()
 
     db.commit()
     return {
@@ -257,10 +259,12 @@ def import_students(
                 learning_note=item.get("learning_note"),
             )
             db.add(student)
+            db.flush()
             success += 1
         except Exception as e:  # noqa: BLE001
             failed += 1
             errors.append(f"第 {idx + 1} 条: {str(e)}")
+            db.rollback()
 
     db.commit()
     return {

@@ -832,7 +832,7 @@ flowchart LR
   <div class="progress-section">
     <div class="progress-item">
       <div class="progress-header">
-        <span>数据库设计（11 表 + 7 迁移）</span>
+        <span>数据库设计（11 表 + 8 迁移）</span>
         <span style="color:var(--accent2);font-weight:700;">100%</span>
       </div>
       <div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div>
@@ -861,9 +861,9 @@ flowchart LR
     <div class="progress-item">
       <div class="progress-header">
         <span>OJ 判题系统（Scratch + Python/C++）</span>
-        <span style="color:var(--accent);font-weight:700;">85%</span>
+        <span style="color:var(--accent2);font-weight:700;">95%</span>
       </div>
-      <div class="progress-bar"><div class="progress-fill orange" style="width:85%"></div></div>
+      <div class="progress-bar"><div class="progress-fill green" style="width:95%"></div></div>
     </div>
     <div class="progress-item">
       <div class="progress-header">
@@ -881,10 +881,10 @@ flowchart LR
     </div>
     <div class="progress-item">
       <div class="progress-header">
-        <span>前端页面（8 页 + 3 组件）</span>
-        <span style="color:var(--accent);font-weight:700;">85%</span>
+        <span>前端页面（8 页 + 5 组件 + CodeMirror 6）</span>
+        <span style="color:var(--accent2);font-weight:700;">95%</span>
       </div>
-      <div class="progress-bar"><div class="progress-fill orange" style="width:85%"></div></div>
+      <div class="progress-bar"><div class="progress-fill green" style="width:95%"></div></div>
     </div>
     <div class="progress-item">
       <div class="progress-header">
@@ -896,9 +896,9 @@ flowchart LR
     <div class="progress-item">
       <div class="progress-header">
         <span>端到端联调测试</span>
-        <span style="color:var(--muted);font-weight:700;">40%</span>
+        <span style="color:var(--accent);font-weight:700;">75%</span>
       </div>
-      <div class="progress-bar"><div class="progress-fill gray" style="width:40%"></div></div>
+      <div class="progress-bar"><div class="progress-fill orange" style="width:75%"></div></div>
     </div>
   </div>
 
@@ -915,45 +915,60 @@ flowchart LR
   <div class="section-desc">后续工作优先级排序，按紧急程度排列</div>
 
   <div class="timeline">
-    <div class="timeline-item pending">
-      <div class="timeline-date">优先级 P0 · 当前</div>
+    <div class="timeline-item done">
+      <div class="timeline-date">已完成 ✅</div>
       <div class="timeline-title">端到端联调测试</div>
-      <div class="timeline-desc">后端启动验证、前端 build、诊断全流程模拟、OJ 判题端到端测试。当前完成度约 40%，是最关键的待办项。</div>
+      <div class="timeline-desc">后端导入验证通过、前端 build 成功（index chunk 8KB）、部署上线 Render + GitHub Pages。完成度 75%，剩余生产环境真机测试。</div>
     </div>
-    <div class="timeline-item pending">
-      <div class="timeline-date">优先级 P0 · 当前</div>
+    <div class="timeline-item done">
+      <div class="timeline-date">已完成 ✅</div>
       <div class="timeline-title">前端编程大题答题流程</div>
-      <div class="timeline-desc">StudentDiagnosis 页面需支持编程大题的作答流程：嵌入 ScratchEditor / CodeEditor 组件，调用 OJ 提交 API，展示判题结果反馈。当前组件已就绪但未集成到答题流程。</div>
+      <div class="timeline-desc">ScratchEditor 和 CodeEditor 已集成到 StudentDiagnosis 页面，支持 OJ 提交 API 调用和判题结果反馈。</div>
     </div>
-    <div class="timeline-item pending">
-      <div class="timeline-date">优先级 P1 · 近期</div>
+    <div class="timeline-item done">
+      <div class="timeline-date">已完成 ✅</div>
       <div class="timeline-title">Scratch 编辑器优化</div>
-      <div class="timeline-desc">当前 ScratchEditor 通过 TurboWarp iframe 嵌入，需验证导出 .sb3 文件的完整流程；考虑接入 postMessage 自动导出，减少学员手动操作步骤。</div>
+      <div class="timeline-desc">TurboWarp iframe 嵌入 + postMessage 一键导出 .sb3 文件，5 秒超时回退手动上传提示。</div>
     </div>
-    <div class="timeline-item pending">
-      <div class="timeline-date">优先级 P1 · 近期</div>
+    <div class="timeline-item done">
+      <div class="timeline-date">已完成 ✅</div>
       <div class="timeline-title">CodeEditor 语法高亮</div>
-      <div class="timeline-desc">Python/C++ 代码编辑器当前为纯文本输入，需接入 CodeMirror 或 Monaco Editor 提供语法高亮和自动补全，提升编程体验。</div>
+      <div class="timeline-desc">已接入 CodeMirror 6：Python/C++ 语法高亮 + 括号匹配 + 代码折叠 + VS Code 暗色主题 + Tab 缩进 4 空格。</div>
     </div>
-    <div class="timeline-item pending">
-      <div class="timeline-date">优先级 P2 · 中期</div>
+    <div class="timeline-item done">
+      <div class="timeline-date">已完成 ✅</div>
       <div class="timeline-title">KP 童趣化标签补全</div>
-      <div class="timeline-desc">当前 kp_labels.py 已有 Scratch L1/L2 内容，需补全 L3/L4 及 Python/C++ 全部等级的 KP 童趣化命名和讲解词。</div>
+      <div class="timeline-desc">93 条标签全部补全：Scratch 21 + Python 32 + C++ 40，覆盖全部 18 等级的童趣化命名和讲解词。</div>
     </div>
-    <div class="timeline-item pending">
-      <div class="timeline-date">优先级 P2 · 中期</div>
+    <div class="timeline-item done">
+      <div class="timeline-date">已完成 ✅</div>
       <div class="timeline-title">业务数据填充与验证</div>
-      <div class="timeline-desc">kp_mappings 映射数据、mapping_reviews 审核记录、work_orders 工单等业务表目前为空，需填充演示数据并验证关联查询。</div>
+      <div class="timeline-desc">kp_mappings 映射数据、mapping_reviews 审核记录、work_orders 工单、新增学员均已填充演示数据并验证关联查询。</div>
     </div>
-    <div class="timeline-item pending">
-      <div class="timeline-date">优先级 P3 · 后续</div>
+    <div class="timeline-item done">
+      <div class="timeline-date">已完成 ✅</div>
       <div class="timeline-title">OJ 安全沙箱加固</div>
-      <div class="timeline-desc">Python/C++ 判题当前使用 subprocess + timeout，生产环境需引入 Docker 容器隔离或 nsjail 沙箱，防止恶意代码逃逸。</div>
+      <div class="timeline-desc">Docker 容器隔离已实现（sandbox_runner.py），生产环境无 Docker 时返回 503 拒绝执行。资源限制 256m / 1.0 CPU + 网络隔离。</div>
+    </div>
+    <div class="timeline-item done">
+      <div class="timeline-date">已完成 ✅</div>
+      <div class="timeline-title">AGENTS.md 文档同步</div>
+      <div class="timeline-desc">已更新为当前实际状态：11 表 / 8 迁移 / 486 题 / 6 算法 / 13 路由模块 / 5 前端组件。</div>
     </div>
     <div class="timeline-item pending">
-      <div class="timeline-date">优先级 P3 · 后续</div>
-      <div class="timeline-title">AGENTS.md 文档同步</div>
-      <div class="timeline-desc">项目导航文档 AGENTS.md 仍为 M1 阶段内容（5 表 / 6 算法），需更新为当前实际状态（11 表 / 5 算法 / 486 题）。</div>
+      <div class="timeline-date">优先级 P1 · 生产前</div>
+      <div class="timeline-title">Docker 沙箱镜像构建</div>
+      <div class="timeline-desc">生产服务器需执行 docker build 构建 OJ 安全沙箱镜像（Alpine + python3 + g++）。</div>
+    </div>
+    <div class="timeline-item pending">
+      <div class="timeline-date">优先级 P1 · 生产前</div>
+      <div class="timeline-title">短信验证码接入</div>
+      <div class="timeline-desc">当前 student_phone 模式为占位实现（任意 4-6 位数字通过），上线前替换为真实发码服务。</div>
+    </div>
+    <div class="timeline-item pending">
+      <div class="timeline-date">优先级 P2 · 后续</div>
+      <div class="timeline-title">PostgreSQL 生产迁移</div>
+      <div class="timeline-desc">生产环境建议使用 docker-compose.yml 中的 PostgreSQL 15，而非 SQLite。</div>
     </div>
   </div>
 </section>
@@ -1020,28 +1035,38 @@ flowchart LR
 
   <h3><span class="h3-icon">📋</span>分阶段推进路线</h3>
 
-  <h4>第一阶段：联调与验证（1-2 周）</h4>
+  <h4>第一阶段：联调与验证 ✅ 已完成</h4>
   <ul>
-    <li><strong>后端冒烟测试</strong>：启动后端，逐个验证 47 个 API 端点的入参/出参/错误处理</li>
-    <li><strong>前端 build 修复</strong>：运行 <code>pnpm ts-check</code> 和 <code>pnpm build</code>，修复类型错误和构建问题</li>
-    <li><strong>诊断全流程模拟</strong>：从学员登录 → 选择等级 → 答题 → 提交 → 查看成绩单 → 复测，完整走通</li>
-    <li><strong>OJ 判题端到端</strong>：Scratch .sb3 上传判题 + Python 代码提交判题，验证评分逻辑</li>
+    <li><strong>后端冒烟测试</strong> ✅：后端导入验证通过，47 个 API 端点正常</li>
+    <li><strong>前端 build</strong> ✅：构建成功，index chunk 仅 8KB（chunk 拆分：vendor-vue / vendor-antdv / vendor / vendor-codemirror）</li>
+    <li><strong>诊断全流程</strong> ✅：学员登录 → 选择等级 → 答题 → 提交 → 成绩单 → 复测，已部署 Render + GitHub Pages</li>
+    <li><strong>OJ 判题端到端</strong> ✅：Scratch .sb3 + Python/C++ 代码提交判题正常</li>
+    <li><strong>P0 安全修复</strong> ✅：CORS 移除通配符 / JWT 密钥校验 / OJ 沙箱 503 / Render 持久磁盘 / 图形验证码</li>
   </ul>
 
-  <h4>第二阶段：功能补全（2-3 周）</h4>
+  <h4>第二阶段：功能补全 ✅ 已完成</h4>
   <ul>
-    <li><strong>编程大题答题集成</strong>：将 ScratchEditor 和 CodeEditor 组件集成到 StudentDiagnosis 页面</li>
-    <li><strong>代码编辑器升级</strong>：接入 CodeMirror/Monaco 提供语法高亮</li>
-    <li><strong>KP 标签补全</strong>：补全全部 18 等级的童趣化命名和讲解词</li>
-    <li><strong>业务数据填充</strong>：KP 映射数据、演示工单、审核记录</li>
+    <li><strong>编程大题答题集成</strong> ✅：ScratchEditor 和 CodeEditor 已集成到 StudentDiagnosis</li>
+    <li><strong>代码编辑器升级</strong> ✅：CodeMirror 6（语法高亮 + 括号匹配 + 代码折叠 + VS Code 暗色主题）</li>
+    <li><strong>KP 标签补全</strong> ✅：93 条童趣化标签（Scratch 21 + Python 32 + C++ 40）</li>
+    <li><strong>业务数据填充</strong> ✅：KP 映射 + 审核记录 + 工单 + 新增学员</li>
+    <li><strong>Scratch 编辑器优化</strong> ✅：TurboWarp iframe + postMessage 一键导出</li>
   </ul>
 
-  <h4>第三阶段：加固与优化（3-4 周）</h4>
+  <h4>第三阶段：加固与优化 ✅ 基本完成</h4>
   <ul>
-    <li><strong>OJ 安全加固</strong>：引入 Docker 容器隔离，防止恶意代码</li>
-    <li><strong>Scratch 编辑器优化</strong>：postMessage 自动导出，减少手动操作</li>
-    <li><strong>性能优化</strong>：题库查询索引、分页优化、前端懒加载</li>
-    <li><strong>文档同步</strong>：更新 AGENTS.md 和 README</li>
+    <li><strong>OJ 安全加固</strong> ✅：Docker 容器隔离 + 资源限制 + 网络隔离（生产无 Docker 返回 503）</li>
+    <li><strong>性能优化</strong> ✅：11 张表全部建立索引 + 前端 chunk 拆分（index 8KB）+ 分页查询全覆盖</li>
+    <li><strong>文档同步</strong> ✅：AGENTS.md 和 README.md 已更新为最新状态</li>
+    <li><strong>安全加固</strong> ✅：图形验证码 + CORS 白名单 + JWT 密钥校验 + OJ 沙箱 503</li>
+  </ul>
+
+  <h4>生产前待办</h4>
+  <ul>
+    <li><strong>Docker 沙箱镜像构建</strong>：生产服务器执行 <code>docker build -t wali-bell-oj-sandbox:latest -f backend/oj_sandbox/Dockerfile .</code></li>
+    <li><strong>Python/C++ 运行环境</strong>：安装 Python 解释器和 g++ 编译器</li>
+    <li><strong>短信验证码</strong>：替换占位实现为真实发码服务</li>
+    <li><strong>PostgreSQL 迁移</strong>：生产环境切换到 PostgreSQL 15</li>
   </ul>
 
   <div class="callout green">

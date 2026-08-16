@@ -186,12 +186,27 @@ def review_kp_mapping(
         )
 
     reviewer_id = _resolve_teacher_id(user, db)
+    if reviewer_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无法解析教师身份，请联系管理员",
+        )
 
-    # 自动判断当前是第几审
+    if mapping.reviewer1_id is not None and mapping.reviewer2_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该映射已完成二审，不可再次审核",
+        )
+
     if mapping.reviewer1_id is None:
         review_round = 1
         mapping.reviewer1_id = reviewer_id
     else:
+        if mapping.reviewer1_id == reviewer_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="一审审核人不可兼任二审，请由其他老师进行二审",
+            )
         review_round = 2
         mapping.reviewer2_id = reviewer_id
 
