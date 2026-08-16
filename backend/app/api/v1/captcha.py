@@ -117,7 +117,7 @@ def create_captcha() -> CaptchaResponse:
 
 
 def verify_captcha(captcha_id: str, captcha_code: str) -> bool:
-    """校验验证码，成功后自动销毁（一次性）。"""
+    """校验验证码，成功后自动销毁（一次性）。失败时保留，允许重试。"""
     _gc()
     if not captcha_id or not captcha_code:
         return False
@@ -129,8 +129,6 @@ def verify_captcha(captcha_id: str, captcha_code: str) -> bool:
         del _store[captcha_id]
         return False
     if answer.upper() != captcha_code.strip().upper():
-        del _store[captcha_id]
         return False
-    # 验证成功，销毁
     del _store[captcha_id]
     return True

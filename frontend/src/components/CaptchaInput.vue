@@ -33,6 +33,8 @@ function onInput(v: string) {
   emit("update:captchaCode", v);
 }
 
+defineExpose({ refreshCaptcha });
+
 onMounted(() => {
   refreshCaptcha();
 });

@@ -22,6 +22,7 @@ const studentId = ref("");
 const password = ref("");
 const captchaId = ref("");
 const captchaCode = ref("");
+const captchaRef = ref();
 
 async function submit() {
   if (loading.value) return;
@@ -66,6 +67,7 @@ async function submit() {
     router.push("/student/home");
   } catch (e) {
     message.error(extractErrorMessage(e, "再试一次！"));
+    captchaRef.value?.refreshCaptcha();
   } finally {
     loading.value = false;
   }
@@ -147,6 +149,7 @@ async function submit() {
 
         <a-form-item label="图形验证码">
           <CaptchaInput
+            ref="captchaRef"
             @update:captchaId="captchaId = $event"
             @update:captchaCode="captchaCode = $event"
           />
