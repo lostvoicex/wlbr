@@ -19,6 +19,7 @@ const captchaCode = ref("");
 const loading = ref(false);
 
 async function submit() {
+  if (loading.value) return;
   if (!account.value.trim() || !password.value) {
     message.warning("请输入工号和密码");
     return;
@@ -85,9 +86,8 @@ async function submit() {
           block
           :loading="loading"
           html-type="submit"
-          @click="submit"
         >
-          登录
+          登 录
         </a-button>
       </a-form>
 

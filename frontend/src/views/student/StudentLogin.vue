@@ -24,6 +24,7 @@ const captchaId = ref("");
 const captchaCode = ref("");
 
 async function submit() {
+  if (loading.value) return;
   if (!captchaCode.value) {
     message.warning("请输入验证码");
     return;
@@ -156,7 +157,6 @@ async function submit() {
           block
           :loading="loading"
           html-type="submit"
-          @click="submit"
         >
           出发！开始闯关
         </a-button>

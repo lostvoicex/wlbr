@@ -60,9 +60,7 @@ _DEFAULT_TEACHERS: list[dict[str, str]] = [
 
 
 def _ensure_default_teachers(db: Session) -> None:
-    """开发环境：teachers 表为空时自动创建演示账号。生产环境跳过。"""
-    if settings.is_prod:
-        return
+    """teachers 表为空时自动创建演示账号（含生产环境首次部署）。"""
     count = db.query(Teacher).count()
     if count > 0:
         return
