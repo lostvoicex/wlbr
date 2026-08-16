@@ -19,6 +19,7 @@ router = APIRouter(prefix="/captcha", tags=["captcha"])
 # 内存存储：captcha_id -> (answer, expire_timestamp)
 _store: Dict[str, Tuple[str, float]] = {}
 _CAPTCHA_TTL = 300  # 5 分钟过期
+_MAX_STORE_SIZE = 500  # 最大存储条数，防止内存泄漏
 
 
 def _gc() -> None:
@@ -26,6 +27,10 @@ def _gc() -> None:
     expired = [k for k, (_, exp) in _store.items() if exp < now]
     for k in expired:
         del _store[k]
+    if len(_store) > _MAX_STORE_SIZE:
+        sorted_items = sorted(_store.items(), key=lambda x: x[1][1])
+        for k, _ in sorted_items[: len(_store) - _MAX_STORE_SIZE]:
+            del _store[k]
 
 
 def _generate_text(length: int = 4) -> str:

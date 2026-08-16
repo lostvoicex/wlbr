@@ -123,7 +123,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenPair:
 
 
 @router.post("/refresh", response_model=TokenPair, summary="刷新 access token")
-def refresh_token(payload: RefreshRequest) -> TokenPair:
+def refresh_token(payload: RefreshRequest, db: Session = Depends(get_db)) -> TokenPair:
     try:
         decoded = decode_token(payload.refresh_token)
     except JWTError:
@@ -140,4 +140,27 @@ def refresh_token(payload: RefreshRequest) -> TokenPair:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="refresh token 载荷不完整"
         )
+
+    if role == "student":
+        try:
+            sid = int(sub)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="用户信息异常，请重新登录"
+            )
+        if not db.query(Student).filter(Student.id == sid).first():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="账号不存在，请重新登录"
+            )
+    elif role in ("teacher", "admin"):
+        teacher = (
+            db.query(Teacher)
+            .filter(Teacher.teacher_no == sub, Teacher.status == "active")
+            .first()
+        )
+        if not teacher:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="账号已停用或不存在，请联系管理员"
+            )
+
     return _issue_token_pair(subject=sub, role=role)

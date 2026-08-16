@@ -3,8 +3,11 @@ from dataclasses import dataclass
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
 
 from app.core.security import JWTError, decode_token
+from app.db import get_db
+from app.models import Student, Teacher
 
 # tokenUrl 只是给 OpenAPI 文档用；真实登录接口在 /api/v1/auth/login
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
@@ -16,7 +19,10 @@ class CurrentUser:
     role: str  # student / teacher / admin
 
 
-def get_current_user(token: str | None = Depends(oauth2_scheme)) -> CurrentUser:
+def get_current_user(
+    token: str | None = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> CurrentUser:
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -41,6 +47,28 @@ def get_current_user(token: str | None = Depends(oauth2_scheme)) -> CurrentUser:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Token 载荷不完整"
         )
+
+    if role == "student":
+        try:
+            sid = int(sub)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="用户信息异常"
+            )
+        if not db.query(Student.id).filter(Student.id == sid).first():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="账号不存在，请重新登录"
+            )
+    elif role in ("teacher", "admin"):
+        if not (
+            db.query(Teacher.id)
+            .filter(Teacher.teacher_no == sub, Teacher.status == "active")
+            .first()
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="账号已停用，请联系管理员"
+            )
+
     return CurrentUser(subject=sub, role=role)
 
 
