@@ -6,6 +6,7 @@ import { login } from "@/api/auth";
 import { extractErrorMessage } from "@/api/client";
 import { useAuthStore } from "@/stores/auth";
 import BrandLogo from "@/components/BrandLogo.vue";
+import CaptchaInput from "@/components/CaptchaInput.vue";
 import brand from "@/config/brand";
 
 const router = useRouter();
@@ -13,11 +14,17 @@ const auth = useAuthStore();
 
 const account = ref("");
 const password = ref("");
+const captchaId = ref("");
+const captchaCode = ref("");
 const loading = ref(false);
 
 async function submit() {
   if (!account.value.trim() || !password.value) {
     message.warning("请输入工号和密码");
+    return;
+  }
+  if (!captchaCode.value) {
+    message.warning("请输入验证码");
     return;
   }
   loading.value = true;
@@ -26,6 +33,8 @@ async function submit() {
       mode: "teacher",
       account: account.value.trim(),
       credential: password.value,
+      captcha_id: captchaId.value,
+      captcha_code: captchaCode.value,
     });
     auth.setAuth(data);
     message.success("登录成功");
@@ -65,6 +74,12 @@ async function submit() {
         <a-form-item label="密码">
           <a-input-password v-model:value="password" placeholder="登录密码" />
         </a-form-item>
+        <a-form-item label="图形验证码">
+          <CaptchaInput
+            @update:captchaId="captchaId = $event"
+            @update:captchaCode="captchaCode = $event"
+          />
+        </a-form-item>
         <a-button
           type="primary"
           block
@@ -77,8 +92,6 @@ async function submit() {
       </a-form>
 
       <div class="footer">
-        M1 演示账号：T001 / T002 / admin，密码见 README
-        <span class="dot">·</span>
         <router-link to="/student/login">切换到学员端</router-link>
       </div>
     </div>

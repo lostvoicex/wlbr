@@ -2,8 +2,10 @@
 from functools import lru_cache
 from typing import List
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_INSECURE_JWT_DEFAULT = "change-me-in-prod"
 
 
 class Settings(BaseSettings):
@@ -28,7 +30,7 @@ class Settings(BaseSettings):
     )
 
     # JWT
-    jwt_secret_key: str = Field(default="change-me-in-prod")
+    jwt_secret_key: str = Field(default=_INSECURE_JWT_DEFAULT)
     jwt_algorithm: str = Field(default="HS256")
     jwt_access_token_expire_minutes: int = Field(default=60)
     jwt_refresh_token_expire_days: int = Field(default=14)
@@ -44,6 +46,25 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         return [o.strip() for o in self.cors_allow_origins.split(",") if o.strip()]
+
+    @property
+    def is_prod(self) -> bool:
+        return self.app_env == "prod"
+
+    @model_validator(mode="after")
+    def _validate_prod_security(self) -> "Settings":
+        if self.is_prod:
+            if self.jwt_secret_key == _INSECURE_JWT_DEFAULT:
+                raise RuntimeError(
+                    "生产环境（APP_ENV=prod）必须设置 JWT_SECRET_KEY 环境变量，"
+                    "不能使用默认值。"
+                )
+            if self.database_url.startswith("sqlite"):
+                import logging
+                logging.getLogger(__name__).warning(
+                    "生产环境使用 SQLite，数据可能不持久。建议配置 PostgreSQL DATABASE_URL。"
+                )
+        return self
 
 
 @lru_cache(maxsize=1)

@@ -27,21 +27,40 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_allowed_origins = settings.cors_origins_list
+if not _allowed_origins:
+    raise RuntimeError(
+        "CORS_ALLOW_ORIGINS 未配置，请设置环境变量。"
+        "开发环境示例：http://localhost:5000,http://127.0.0.1:5000"
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list or ["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
 
 @app.api_route("/api/health", methods=["GET", "HEAD"], tags=["meta"], summary="健康检查")
 def health() -> dict:
+    from sqlalchemy import text as sa_text
+    from app.db import SessionLocal
+
+    db_ok = True
+    try:
+        db = SessionLocal()
+        db.execute(sa_text("SELECT 1"))
+        db.close()
+    except Exception:
+        db_ok = False
+
     return {
-        "status": "ok",
+        "status": "ok" if db_ok else "degraded",
         "app": settings.app_name,
         "env": settings.app_env,
+        "db": "ok" if db_ok else "error",
         "version": "0.1.0",
     }
 

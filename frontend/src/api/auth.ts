@@ -14,6 +14,8 @@ export function login(payload: {
   mode: LoginMode;
   account: string;
   credential: string;
+  captcha_id: string;
+  captcha_code: string;
 }) {
   return client.post<TokenPair>("/auth/login", payload).then((r) => r.data);
 }
@@ -22,4 +24,13 @@ export function refresh(refresh_token: string) {
   return client
     .post<TokenPair>("/auth/refresh", { refresh_token })
     .then((r) => r.data);
+}
+
+export function getCaptchaImage(): string {
+  const baseURL = (client.defaults.baseURL || "/api/v1").replace(/\/$/, "");
+  return `${baseURL}/captcha/image?t=${Date.now()}`;
+}
+
+export async function createCaptcha(): Promise<{ captcha_id: string; expires_in: number }> {
+  return client.get("/captcha/new").then((r) => r.data);
 }

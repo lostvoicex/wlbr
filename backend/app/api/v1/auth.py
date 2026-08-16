@@ -1,14 +1,14 @@
 """认证路由：/api/v1/auth/*
 
 说明：
-- 学员手机号+验证码：为了不引入短信平台依赖，这里做占位实现——
-  接受任意 4-6 位数字验证码。真实上线前替换成"发码/校验"流程。
-- 学员学号+密码：需要 students 表中存在该 id 且已设置 password_hash。
-- 老师登录：从数据库 teachers 表查询，若表为空则自动创建默认演示账号。
+- 学员手机号+验证码：需配合图形验证码使用，手机号需已注册
+- 学员学号+密码：需要 students 表中存在该 id 且已设置 password_hash
+- 老师登录：从数据库 teachers 表查询，开发环境自动创建演示账号
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.core.security import (
     JWTError,
     create_access_token,
@@ -20,11 +20,12 @@ from app.core.security import (
 from app.db import get_db
 from app.models import Student, Teacher
 from app.schemas.auth import LoginRequest, RefreshRequest, TokenPair
+from app.api.v1.captcha import verify_captcha
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-# 默认演示老师账号（teachers 表为空时自动创建）
+# 默认演示老师账号（仅开发环境，teachers 表为空时自动创建）
 _DEFAULT_TEACHERS: list[dict[str, str]] = [
     {"teacher_no": "T001", "password": "teacher123", "name": "王老师", "role": "teacher"},
     {"teacher_no": "T002", "password": "teacher123", "name": "李老师", "role": "teacher"},
@@ -33,7 +34,9 @@ _DEFAULT_TEACHERS: list[dict[str, str]] = [
 
 
 def _ensure_default_teachers(db: Session) -> None:
-    """如果 teachers 表为空，自动创建默认演示账号。"""
+    """开发环境：teachers 表为空时自动创建演示账号。生产环境跳过。"""
+    if settings.is_prod:
+        return
     count = db.query(Teacher).count()
     if count > 0:
         return
@@ -60,8 +63,14 @@ def _issue_token_pair(subject: str, role: str) -> TokenPair:
 
 @router.post("/login", response_model=TokenPair, summary="统一登录入口")
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenPair:
+    # 校验图形验证码
+    if not verify_captcha(payload.captcha_id, payload.captcha_code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="验证码不对，看不清楚可以换一张哦",
+        )
+
     if payload.mode == "student_phone":
-        # 占位：任意 4-6 位数字验证码通过，且需要 phone 已注册
         code = payload.credential.strip()
         if not (code.isdigit() and 4 <= len(code) <= 6):
             raise HTTPException(
@@ -95,7 +104,6 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenPair:
         return _issue_token_pair(subject=str(student.id), role="student")
 
     if payload.mode == "teacher":
-        # 首次登录时确保有默认演示账号
         _ensure_default_teachers(db)
 
         acct = payload.account.strip()

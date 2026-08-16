@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     admin_data,
     auth,
+    captcha,
     copy_texts,
     diagnosis_sessions,
     kp_labels,
@@ -29,5 +30,6 @@ api_v1_router.include_router(work_orders.router)
 api_v1_router.include_router(kp_mappings.router)
 api_v1_router.include_router(admin_data.router)
 api_v1_router.include_router(oj.router)
+api_v1_router.include_router(captcha.router)
 
 __all__ = ["api_v1_router"]

@@ -229,7 +229,18 @@ def submit(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="这次闯关已经结束啦"
             )
 
-    # 同步判题
+    # 同步判题（生产环境无 Docker 沙箱时拒绝执行）
+    if payload.language in ("python", "cpp"):
+        from app.services.sandbox_runner import SandboxUnavailableError
+        try:
+            from app.services.sandbox_runner import get_sandbox_runner
+            get_sandbox_runner()
+        except SandboxUnavailableError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="编程题判题服务暂未就绪，请稍后再试或联系老师。",
+            )
+
     start_ts = time.time()
     result = _dispatch_grading(question, payload.code, payload.language)
     judge_duration_ms = int((time.time() - start_ts) * 1000)

@@ -6,6 +6,7 @@ import { login } from "@/api/auth";
 import { extractErrorMessage } from "@/api/client";
 import { useAuthStore } from "@/stores/auth";
 import BrandLogo from "@/components/BrandLogo.vue";
+import CaptchaInput from "@/components/CaptchaInput.vue";
 import brand from "@/config/brand";
 
 const router = useRouter();
@@ -19,8 +20,14 @@ const phone = ref("");
 const code = ref("");
 const studentId = ref("");
 const password = ref("");
+const captchaId = ref("");
+const captchaCode = ref("");
 
 async function submit() {
+  if (!captchaCode.value) {
+    message.warning("请输入验证码");
+    return;
+  }
   loading.value = true;
   try {
     if (tab.value === "phone") {
@@ -36,6 +43,8 @@ async function submit() {
         mode: "student_phone",
         account: phone.value,
         credential: code.value,
+        captcha_id: captchaId.value,
+        captcha_code: captchaCode.value,
       });
       auth.setAuth(data);
     } else {
@@ -47,6 +56,8 @@ async function submit() {
         mode: "student_id",
         account: studentId.value.trim(),
         credential: password.value,
+        captcha_id: captchaId.value,
+        captcha_code: captchaCode.value,
       });
       auth.setAuth(data);
     }
@@ -107,7 +118,7 @@ async function submit() {
           <a-form-item label="验证码">
             <a-input
               v-model:value="code"
-              placeholder="4-6 位数字（闯关模式：先随便填就行）"
+              placeholder="4-6 位数字"
               size="large"
               maxlength="6"
               allow-clear
@@ -132,6 +143,13 @@ async function submit() {
             />
           </a-form-item>
         </template>
+
+        <a-form-item label="图形验证码">
+          <CaptchaInput
+            @update:captchaId="captchaId = $event"
+            @update:captchaCode="captchaCode = $event"
+          />
+        </a-form-item>
 
         <a-button
           type="primary"
