@@ -6,9 +6,11 @@ import {
   getResult,
   getWeightedResult,
   shareReportToTeacher,
+  getSessionAnswers,
   type ResultResponse,
   type PerKpResult,
   type WeightedKpItem,
+  type AnswerDetailItem,
 } from "@/api/diagnosis";
 import { useKpLabelsStore } from "@/stores/kpLabels";
 import { useCopyTextsStore } from "@/stores/copyTexts";
@@ -89,6 +91,60 @@ const grouped = computed(() => {
   }
   return g;
 });
+
+// ---- 错题查看 ----
+const showWrongAnswers = ref(false);
+const wrongAnswersLoading = ref(false);
+const wrongAnswers = ref<AnswerDetailItem[] | null>(null);
+
+const qTypeEmoji: Record<string, string> = {
+  single: "📝",
+  judge: "✅",
+  coding: "🧩",
+  program: "💻",
+};
+
+async function toggleWrongAnswers() {
+  if (showWrongAnswers.value) {
+    showWrongAnswers.value = false;
+    return;
+  }
+  if (wrongAnswers.value) {
+    showWrongAnswers.value = true;
+    return;
+  }
+  wrongAnswersLoading.value = true;
+  showWrongAnswers.value = true;
+  try {
+    const resp = await getSessionAnswers(sessionId);
+    wrongAnswers.value = resp.items.filter((item) => item.is_correct === false);
+  } catch {
+    message.error("题目加载失败，稍后再试～");
+    showWrongAnswers.value = false;
+  } finally {
+    wrongAnswersLoading.value = false;
+  }
+}
+
+function formatStudentAnswer(item: AnswerDetailItem): string {
+  if (!item.student_answer) return "没作答";
+  if (item.q_type === "program") {
+    if (item.student_answer.startsWith("[OJ]")) {
+      const m = item.student_answer.match(/score=(\d+)/);
+      return m ? `得分 ${m[1]} 分` : "已提交代码";
+    }
+    return "已提交代码";
+  }
+  return item.student_answer;
+}
+
+function formatCorrectAnswer(item: AnswerDetailItem): string {
+  if (item.q_type === "judge") {
+    const truthy = new Set(["true", "True", "1", "对", "正确", "是", "yes"]);
+    return truthy.has(item.correct_answer) ? "对的" : "错的";
+  }
+  return item.correct_answer;
+}
 
 function formatRate(k: PerKpResult) {
   const r = Math.round(Number(k.correct_rate) * 100);
@@ -238,6 +294,49 @@ const weightedGrouped = computed(() => {
             </div>
             <div class="kp-meta">答对 {{ formatRate(k) }}</div>
             <div v-if="k.ppt_ref" class="kp-ppt">📖 关联章节：{{ k.ppt_ref }}</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 错题查看 -->
+      <section class="wrong-section">
+        <div class="wrong-title toggle" @click="toggleWrongAnswers">
+          🔍 看看哪些题答错了
+          <span class="toggle-arrow">{{ showWrongAnswers ? "▲" : "▼" }}</span>
+        </div>
+        <div v-show="showWrongAnswers">
+          <div v-if="wrongAnswersLoading" class="loading-box" style="padding: 30px 12px;">
+            📝 正在整理错题…
+          </div>
+          <div v-else-if="wrongAnswers && wrongAnswers.length === 0" class="wrong-empty">
+            🎉 太棒了！没有错题，全部答对了！
+          </div>
+          <div v-else-if="wrongAnswers" class="wrong-list">
+            <div
+              v-for="(item, idx) in wrongAnswers"
+              :key="item.question_id"
+              class="wrong-card"
+            >
+              <div class="wrong-card-header">
+                <span class="wrong-emoji">{{ qTypeEmoji[item.q_type] || "📝" }}</span>
+                <span class="wrong-index">第 {{ idx + 1 }} 题</span>
+                <span class="wrong-kp">{{ kpLabels.getDisplay(item.knowledge_point) }}</span>
+              </div>
+              <div class="wrong-content">{{ item.content }}</div>
+              <div class="wrong-detail">
+                <div class="wrong-row">
+                  <span class="wrong-label">你答的：</span>
+                  <span class="wrong-value wrong-strike">{{ formatStudentAnswer(item) }}</span>
+                </div>
+                <div class="wrong-row">
+                  <span class="wrong-label">正确答案：</span>
+                  <span class="wrong-value wrong-correct">{{ formatCorrectAnswer(item) }}</span>
+                </div>
+                <div v-if="item.explanation" class="wrong-explanation">
+                  💡 {{ item.explanation }}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -558,6 +657,112 @@ const weightedGrouped = computed(() => {
 .kp-ppt-empty {
   color: var(--color-text-sub);
   background: #f5f5f5;
+}
+
+/* 错题查看 */
+.wrong-section {
+  background: #fff;
+  border-radius: var(--radius-lg);
+  padding: 16px 16px 8px;
+  border-left: 4px solid var(--color-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+.wrong-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 10px;
+}
+.wrong-title.toggle {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.wrong-empty {
+  text-align: center;
+  padding: 20px 12px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-pass);
+}
+.wrong-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.wrong-card {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: #fff1f0;
+  border: 1.5px solid #ffccc7;
+}
+.wrong-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.wrong-emoji {
+  font-size: 18px;
+}
+.wrong-index {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+.wrong-kp {
+  flex: 1;
+  font-size: 12px;
+  color: var(--color-text-sub);
+  text-align: right;
+}
+.wrong-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text);
+  margin-bottom: 10px;
+}
+.wrong-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed #ffccc7;
+}
+.wrong-row {
+  display: flex;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  align-items: baseline;
+}
+.wrong-label {
+  color: var(--color-text-sub);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.wrong-value {
+  color: var(--color-text);
+}
+.wrong-strike {
+  color: #ff4d4f;
+  text-decoration: line-through;
+}
+.wrong-correct {
+  color: #52c41a;
+  font-weight: 700;
+}
+.wrong-explanation {
+  font-size: 13px;
+  color: #7a3a00;
+  background: #fff7e6;
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-top: 4px;
+  line-height: 1.5;
 }
 
 .retest-card {

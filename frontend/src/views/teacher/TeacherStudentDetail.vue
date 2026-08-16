@@ -19,6 +19,11 @@ import { listTeachers, type TeacherOut } from "@/api/teachers";
 import { extractErrorMessage } from "@/api/client";
 import { useKpLabelsStore } from "@/stores/kpLabels";
 import { useAuthStore } from "@/stores/auth";
+import {
+  getSessionAnswers,
+  type SessionAnswersResponse,
+  type AnswerDetailItem,
+} from "@/api/diagnosis";
 
 const route = useRoute();
 const router = useRouter();
@@ -88,7 +93,7 @@ const sessionColumns = [
   { title: "状态", key: "status", width: 100 },
   { title: "开始时间", key: "started_at", width: 170 },
   { title: "异常标记", key: "suspicious", width: 100 },
-  { title: "操作", key: "action", width: 120 },
+  { title: "操作", key: "action", width: 160 },
 ];
 
 function formatDate(text: string | null): string {
@@ -268,6 +273,66 @@ async function handleWorkOrderSubmit() {
   }
 }
 
+// ---- 错题查看抽屉 ----
+const answersDrawerVisible = ref(false);
+const answersLoading = ref(false);
+const answersData = ref<SessionAnswersResponse | null>(null);
+const answersSessionId = ref<number | null>(null);
+const showWrongOnly = ref(true);
+
+const qTypeMap: Record<string, string> = {
+  single: "单选题",
+  judge: "判断题",
+  coding: "积木排序",
+  program: "编程大题",
+};
+
+const filteredAnswers = computed(() => {
+  if (!answersData.value) return [];
+  if (!showWrongOnly.value) return answersData.value.items;
+  return answersData.value.items.filter((item) => item.is_correct === false);
+});
+
+const wrongCount = computed(() => {
+  if (!answersData.value) return 0;
+  return answersData.value.items.filter((item) => item.is_correct === false).length;
+});
+
+async function openAnswersDrawer(session: SessionHistoryItem) {
+  answersSessionId.value = session.id;
+  answersDrawerVisible.value = true;
+  answersLoading.value = true;
+  answersData.value = null;
+  showWrongOnly.value = true;
+  try {
+    answersData.value = await getSessionAnswers(session.id);
+  } catch (e) {
+    message.error(extractErrorMessage(e, "加载答题明细失败"));
+  } finally {
+    answersLoading.value = false;
+  }
+}
+
+function formatStudentAnswer(item: AnswerDetailItem): string {
+  if (!item.student_answer) return "未作答";
+  if (item.q_type === "program") {
+    if (item.student_answer.startsWith("[OJ]")) {
+      const m = item.student_answer.match(/score=(\d+)/);
+      return m ? `OJ 得分：${m[1]} 分` : item.student_answer;
+    }
+    return "已提交代码";
+  }
+  return item.student_answer;
+}
+
+function formatCorrectAnswer(item: AnswerDetailItem): string {
+  if (item.q_type === "judge") {
+    const truthy = new Set(["true", "True", "1", "对", "正确", "是", "yes"]);
+    return truthy.has(item.correct_answer) ? "正确" : "错误";
+  }
+  return item.correct_answer;
+}
+
 function goBack() {
   router.push("/teacher/students");
 }
@@ -386,14 +451,24 @@ onMounted(async () => {
             <span v-else class="normal-text">正常</span>
           </template>
           <template v-else-if="column.key === 'action'">
-            <a-button
-              size="small"
-              type="link"
-              :disabled="record.status !== 'finished'"
-              @click="openWorkOrder(record)"
-            >
-              推工单
-            </a-button>
+            <a-space :size="0">
+              <a-button
+                size="small"
+                type="link"
+                :disabled="record.status !== 'finished'"
+                @click="openAnswersDrawer(record)"
+              >
+                查看错题
+              </a-button>
+              <a-button
+                size="small"
+                type="link"
+                :disabled="record.status !== 'finished'"
+                @click="openWorkOrder(record)"
+              >
+                推工单
+              </a-button>
+            </a-space>
           </template>
         </template>
       </a-table>
@@ -512,6 +587,82 @@ onMounted(async () => {
         </a-row>
       </a-form>
     </a-modal>
+
+    <!-- 错题查看抽屉 -->
+    <a-drawer
+      v-model:open="answersDrawerVisible"
+      title="答题明细"
+      placement="right"
+      :width="640"
+    >
+      <a-spin v-if="answersLoading" tip="加载中..." />
+      <div v-else-if="answersData" class="answers-content">
+        <!-- 概览 -->
+        <div class="answers-summary">
+          <a-tag color="blue">{{ sessionTypeMap[answersData.session_type] || answersData.session_type }}</a-tag>
+          <span class="summary-text">
+            {{ answersData.student_name }} · {{ answersData.syllabus_target }}
+          </span>
+          <span class="summary-score">
+            {{ answersData.correct_count }}/{{ answersData.total_count }} 正确
+          </span>
+          <a-tag color="red">错 {{ wrongCount }} 题</a-tag>
+        </div>
+
+        <!-- 筛选切换 -->
+        <div class="answers-filter">
+          <a-radio-group v-model:value="showWrongOnly" button-style="solid" size="small">
+            <a-radio-button :value="true">只看错题（{{ wrongCount }}）</a-radio-button>
+            <a-radio-button :value="false">全部（{{ answersData.items.length }}）</a-radio-button>
+          </a-radio-group>
+        </div>
+
+        <!-- 题目列表 -->
+        <div class="answers-list">
+          <div
+            v-for="(item, idx) in filteredAnswers"
+            :key="item.question_id"
+            class="answer-card"
+            :class="{ wrong: item.is_correct === false, correct: item.is_correct === true }"
+          >
+            <div class="answer-header">
+              <span class="answer-index">第 {{ idx + 1 }} 题</span>
+              <a-tag size="small" :color="item.q_type === 'program' ? 'purple' : 'default'">
+                {{ qTypeMap[item.q_type] || item.q_type }}
+              </a-tag>
+              <span class="answer-kp">{{ getKpName(item.knowledge_point) }}</span>
+              <span class="answer-status">
+                <span v-if="item.is_correct === true" class="status-correct">✓ 正确</span>
+                <span v-else-if="item.is_correct === false" class="status-wrong">✗ 错误</span>
+                <span v-else class="status-unknown">— 未判分</span>
+              </span>
+            </div>
+            <div class="answer-content">{{ item.content }}</div>
+            <div class="answer-detail">
+              <div class="detail-row">
+                <span class="detail-label">学员答案：</span>
+                <span class="detail-value" :class="{ wrong: item.is_correct === false }">
+                  {{ formatStudentAnswer(item) }}
+                </span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">正确答案：</span>
+                <span class="detail-value correct">{{ formatCorrectAnswer(item) }}</span>
+              </div>
+              <div v-if="item.explanation" class="detail-row explanation">
+                <span class="detail-label">解析：</span>
+                <span class="detail-value">{{ item.explanation }}</span>
+              </div>
+            </div>
+          </div>
+          <a-empty
+            v-if="filteredAnswers.length === 0"
+            description="没有错题，全部答对了！"
+            :image-style="{ height: '60px' }"
+          />
+        </div>
+      </div>
+    </a-drawer>
   </div>
 
   <div v-else class="loading-wrap">
@@ -641,5 +792,138 @@ onMounted(async () => {
   justify-content: center;
   align-items: center;
   min-height: 300px;
+}
+
+/* 错题抽屉 */
+.answers-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.answers-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.summary-text {
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.summary-score {
+  font-family: var(--font-num);
+  font-weight: 600;
+  color: var(--color-text-sub);
+}
+
+.answers-filter {
+  margin-bottom: 4px;
+}
+
+.answers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.answer-card {
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.answer-card.wrong {
+  border-color: #ffccc7;
+  background: #fff2f0;
+}
+
+.answer-card.correct {
+  border-color: #d9f7be;
+  background: #f6ffed;
+}
+
+.answer-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.answer-index {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.answer-kp {
+  flex: 1;
+  font-size: 12px;
+  color: var(--color-text-sub);
+}
+
+.answer-status {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status-correct {
+  color: #52c41a;
+}
+
+.status-wrong {
+  color: #ff4d4f;
+}
+
+.status-unknown {
+  color: var(--color-text-sub);
+}
+
+.answer-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text);
+  margin-bottom: 8px;
+}
+
+.answer-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed #e8e8e8;
+}
+
+.detail-row {
+  display: flex;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.detail-row.explanation {
+  padding-top: 4px;
+}
+
+.detail-label {
+  color: var(--color-text-sub);
+  white-space: nowrap;
+}
+
+.detail-value {
+  color: var(--color-text);
+}
+
+.detail-value.wrong {
+  color: #ff4d4f;
+  text-decoration: line-through;
+}
+
+.detail-value.correct {
+  color: #52c41a;
+  font-weight: 600;
 }
 </style>

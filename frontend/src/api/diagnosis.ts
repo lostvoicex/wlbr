@@ -178,3 +178,35 @@ export function getMyHistory() {
     }>("/diagnosis-sessions/my-history")
     .then((r) => r.data);
 }
+
+/** 单道题的答题明细 */
+export interface AnswerDetailItem {
+  question_id: number;
+  q_type: "single" | "judge" | "coding" | "program";
+  knowledge_point: string;
+  content: string;
+  student_answer: string | null;
+  correct_answer: string;
+  is_correct: boolean | null;
+  explanation: string | null;
+  program_lang: string | null;
+}
+
+/** 会话答题明细（错题列表） */
+export interface SessionAnswersResponse {
+  session_id: number;
+  student_id: number;
+  student_name: string;
+  session_type: string;
+  syllabus_target: string;
+  total_count: number;
+  correct_count: number;
+  items: AnswerDetailItem[];
+}
+
+/** 查看会话答题明细（错题列表） */
+export function getSessionAnswers(sessionId: number) {
+  return client
+    .get<SessionAnswersResponse>(`/diagnosis-sessions/${sessionId}/answers`)
+    .then((r) => r.data);
+}

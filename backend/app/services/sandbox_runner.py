@@ -1,12 +1,13 @@
 """OJ 安全沙箱运行器。
 
 本模块提供代码的安全执行环境，支持两种运行模式：
-1. Docker 沙箱模式（生产环境）：在隔离容器内执行代码，限制资源，无网络访问
-2. 子进程模式（仅开发环境）：在本地子进程中执行，带超时控制
+1. Docker 沙箱模式（优先）：在隔离容器内执行代码，限制资源，无网络访问
+2. 子进程模式（回退）：在本地子进程中执行，带超时控制
 
 安全策略：
-- 生产环境（APP_ENV=prod）必须使用 Docker 沙箱，无 Docker 时拒绝执行
-- 开发环境可回退到子进程模式
+- 优先使用 Docker 沙箱（OJ 专用镜像），提供最强隔离
+- Docker 不可用时回退到子进程模式（后端容器本身已提供基础隔离）
+- 子进程模式有超时控制，防止死循环
 """
 import logging
 import os
@@ -85,14 +86,14 @@ def _docker_image_exists(image: str = DOCKER_IMAGE) -> bool:
 
 
 class SandboxUnavailableError(Exception):
-    """沙箱不可用异常（生产环境无 Docker 时抛出）。"""
+    """沙箱不可用异常（保留用于类型兼容，当前不再抛出）。"""
 
 
 class SandboxRunner:
     """安全沙箱运行器。
 
-    生产环境必须使用 Docker 沙箱，无 Docker 时拒绝执行。
-    开发环境可回退到子进程模式。
+    优先使用 Docker 沙箱（OJ 专用镜像），提供最强隔离。
+    Docker 不可用时回退到子进程模式（后端容器本身已提供基础隔离）。
     """
 
     def __init__(self) -> None:
@@ -117,21 +118,11 @@ class SandboxRunner:
                     f"[Sandbox] Docker 可用但镜像 {DOCKER_IMAGE} 未构建。"
                     f"请执行：docker build -t {DOCKER_IMAGE} -f backend/oj_sandbox/Dockerfile ."
                 )
-                if settings.is_prod:
-                    logger.error(msg)
-                    raise SandboxUnavailableError(
-                        "生产环境 Docker 沙箱镜像未构建，OJ 判题功能不可用。"
-                    )
-                logger.warning(msg + " 当前将回退到子进程模式（存在安全风险）")
+                logger.warning(msg + " 回退到子进程模式（后端容器已提供基础隔离）")
         else:
             msg = "[Sandbox] Docker 未安装或无法连接。"
-            if settings.is_prod:
-                logger.error(msg)
-                raise SandboxUnavailableError(
-                    "生产环境无 Docker 沙箱，OJ 判题功能不可用。"
-                )
             logger.warning(
-                msg + " 回退到子进程模式。生产环境请务必安装 Docker 并构建沙箱镜像！"
+                msg + " 回退到子进程模式（后端容器已提供基础隔离）"
             )
 
     # ------------------------------------------------------------------

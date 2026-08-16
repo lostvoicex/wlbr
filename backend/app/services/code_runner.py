@@ -18,9 +18,9 @@
 4. 返回 verdict / score / 测试用例详情
 
 安全执行：
-- 生产环境：通过 sandbox_runner 在 Docker 容器内隔离执行
-- 开发环境：Docker 不可用时自动回退到子进程（带超时控制）
-- 沙箱不可用时：静态分析模式（不执行代码，检查代码结构和输出模式）
+- 优先使用 Docker 沙箱容器隔离执行（OJ 专用镜像）
+- Docker 不可用时回退到子进程模式（后端容器本身已提供基础隔离）
+- 运行环境不可用时（无 Python/g++）：静态分析模式（不执行代码，检查代码结构和输出模式）
 """
 import os
 import platform
@@ -121,6 +121,28 @@ def grade_code(
             # 运行每个测试用例
             for tc in test_cases:
                 stdin_data = tc.get("input", "")
+                expected_raw = tc.get("expected", "")
+
+                # 预期输出和输入都为空时，只检查代码非空（如 Turtle 画图题）
+                if not expected_raw.strip() and not stdin_data.strip():
+                    if code.strip():
+                        passed_cases += 1
+                        case_details.append({
+                            "input": stdin_data,
+                            "expected": expected_raw,
+                            "actual": "[结构检查] 代码已提交，跳过执行",
+                            "passed": True,
+                            "msg": "此题检查代码结构，不产生标准输出",
+                        })
+                    else:
+                        case_details.append({
+                            "input": stdin_data,
+                            "expected": expected_raw,
+                            "actual": "[结构检查] 代码为空",
+                            "passed": False,
+                            "msg": "代码为空",
+                        })
+                    continue
 
                 result = runner.run_python(
                     code_file=code_file,
@@ -131,7 +153,7 @@ def grade_code(
                 if result.timed_out:
                     case_details.append({
                         "input": stdin_data,
-                        "expected": tc.get("expected", ""),
+                        "expected": expected_raw,
                         "actual": "",
                         "passed": False,
                         "msg": f"执行超时（限制 {time_limit} 秒）",
@@ -143,14 +165,13 @@ def grade_code(
                         stderr_msg = result.stderr[:500]
                     case_details.append({
                         "input": stdin_data,
-                        "expected": tc.get("expected", ""),
+                        "expected": expected_raw,
                         "actual": result.stdout,
                         "passed": False,
                         "msg": f"运行时错误: {result.stderr[:200]}",
                     })
                     continue
 
-                expected_raw = tc.get("expected", "")
                 check_mode = tc.get("check_mode", "exact")
                 passed = _check_output(result.stdout, expected_raw, check_mode)
 
@@ -200,6 +221,28 @@ def grade_code(
             # 运行每个测试用例
             for tc in test_cases:
                 stdin_data = tc.get("input", "")
+                expected_raw = tc.get("expected", "")
+
+                # 预期输出和输入都为空时，只检查代码非空
+                if not expected_raw.strip() and not stdin_data.strip():
+                    if code.strip():
+                        passed_cases += 1
+                        case_details.append({
+                            "input": stdin_data,
+                            "expected": expected_raw,
+                            "actual": "[结构检查] 代码已提交，跳过执行",
+                            "passed": True,
+                            "msg": "此题检查代码结构，不产生标准输出",
+                        })
+                    else:
+                        case_details.append({
+                            "input": stdin_data,
+                            "expected": expected_raw,
+                            "actual": "[结构检查] 代码为空",
+                            "passed": False,
+                            "msg": "代码为空",
+                        })
+                    continue
 
                 result = runner.run_cpp_binary(
                     binary_file=exe_file,
@@ -210,7 +253,7 @@ def grade_code(
                 if result.timed_out:
                     case_details.append({
                         "input": stdin_data,
-                        "expected": tc.get("expected", ""),
+                        "expected": expected_raw,
                         "actual": "",
                         "passed": False,
                         "msg": f"执行超时（限制 {time_limit} 秒）",
@@ -222,14 +265,13 @@ def grade_code(
                         stderr_msg = result.stderr[:500]
                     case_details.append({
                         "input": stdin_data,
-                        "expected": tc.get("expected", ""),
+                        "expected": expected_raw,
                         "actual": result.stdout,
                         "passed": False,
                         "msg": f"运行时错误: {result.stderr[:200]}",
                     })
                     continue
 
-                expected_raw = tc.get("expected", "")
                 check_mode = tc.get("check_mode", "exact")
                 passed = _check_output(result.stdout, expected_raw, check_mode)
 

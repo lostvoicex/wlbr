@@ -86,3 +86,28 @@ class DiagnosisResultResponse(BaseModel):
     finished_at: Optional[datetime] = None
     per_kp: List[PerKpResult]
     retest_plan: RetestPlan
+
+
+class AnswerDetailItem(BaseModel):
+    """单道题的答题明细。"""
+    question_id: int
+    q_type: str
+    knowledge_point: str
+    content: str
+    student_answer: Optional[str] = None
+    correct_answer: str
+    is_correct: Optional[bool] = None
+    explanation: Optional[str] = None
+    program_lang: Optional[str] = None
+
+
+class SessionAnswersResponse(BaseModel):
+    """会话答题明细（错题列表）。"""
+    session_id: int
+    student_id: int
+    student_name: str
+    session_type: str
+    syllabus_target: str
+    total_count: int
+    correct_count: int
+    items: List[AnswerDetailItem]

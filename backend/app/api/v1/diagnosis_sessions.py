@@ -28,6 +28,7 @@ from app.models import (
     WorkOrder,
 )
 from app.schemas.diagnosis import (
+    AnswerDetailItem,
     AnswerRequest,
     AnswerResponse,
     DiagnosisResultResponse,
@@ -35,6 +36,7 @@ from app.schemas.diagnosis import (
     PerKpResult,
     QuestionOutStudent,
     RetestPlan,
+    SessionAnswersResponse,
     StartDiagnosisRequest,
     StartDiagnosisResponse,
     TabSwitchRequest,
@@ -869,4 +871,78 @@ def get_my_history(
         )
 
     return SessionHistoryResp(total=len(items), items=items)
+
+
+@router.get(
+    "/{session_id}/answers",
+    response_model=SessionAnswersResponse,
+    summary="查看会话答题明细（错题列表）",
+)
+def get_session_answers(
+    session_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+) -> SessionAnswersResponse:
+    """学员查看自己的答题明细，老师/管理员查看任意学员的答题明细。"""
+    session = (
+        db.query(DiagnosisSession)
+        .filter(DiagnosisSession.id == session_id)
+        .first()
+    )
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="诊断会话不存在"
+        )
+
+    # 权限检查
+    if user.role == "student":
+        student_id = _require_student(user)
+        if session.student_id != student_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只能查看自己的答题记录",
+            )
+    elif user.role not in ("teacher", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="无权查看"
+        )
+
+    # 查询答题记录，关联题目
+    records = (
+        db.query(LearningRecord, Question)
+        .join(Question, LearningRecord.question_id == Question.id)
+        .filter(LearningRecord.session_id == session_id)
+        .order_by(LearningRecord.id.asc())
+        .all()
+    )
+
+    student = db.query(Student).filter(Student.id == session.student_id).first()
+    student_name = student.name if student else "未知学员"
+
+    items: list[AnswerDetailItem] = []
+    for record, question in records:
+        items.append(
+            AnswerDetailItem(
+                question_id=question.id,
+                q_type=question.q_type,
+                knowledge_point=question.knowledge_point,
+                content=question.content,
+                student_answer=record.student_answer,
+                correct_answer=question.answer,
+                is_correct=record.is_correct,
+                explanation=question.explanation,
+                program_lang=question.program_lang,
+            )
+        )
+
+    return SessionAnswersResponse(
+        session_id=session_id,
+        student_id=session.student_id,
+        student_name=student_name,
+        session_type=session.session_type,
+        syllabus_target=session.syllabus_target,
+        total_count=session.total_count,
+        correct_count=session.correct_count,
+        items=items,
+    )
 

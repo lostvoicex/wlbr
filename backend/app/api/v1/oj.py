@@ -229,22 +229,18 @@ def submit(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="这次闯关已经结束啦"
             )
 
-    # 判题：优先使用沙箱执行，沙箱不可用时降级为静态分析
-    use_static = False
-    if payload.language in ("python", "cpp"):
-        from app.services.sandbox_runner import SandboxUnavailableError
-        try:
-            from app.services.sandbox_runner import get_sandbox_runner
-            get_sandbox_runner()
-        except SandboxUnavailableError:
-            use_static = True
-
+    # 判题：优先执行代码（沙箱子进程模式），运行环境不可用时降级为静态分析
     start_ts = time.time()
-    if use_static:
+    try:
+        result = _dispatch_grading(question, payload.code, payload.language)
+        stderr_str = result.get("stderr") or ""
+        if result.get("score", 0) == 0 and "未找到" in stderr_str:
+            rules_json = question.grading_rules or ""
+            result = grade_code_static(payload.code, rules_json, payload.language)
+    except Exception as e:
         rules_json = question.grading_rules or ""
         result = grade_code_static(payload.code, rules_json, payload.language)
-    else:
-        result = _dispatch_grading(question, payload.code, payload.language)
+        result["stderr"] = f"判题异常，已降级为静态分析: {e}"
     judge_duration_ms = int((time.time() - start_ts) * 1000)
 
     verdict = result.get("verdict", "wrong_answer")
